@@ -110,11 +110,13 @@ export default async function launch({ root, user, game }) {
   function makeHuman({ name, avatar, isPlayer, persona }) {
     if (!name && persona) name = persona.name;
     let char, ctrl, bot = null;
+    // Wide per-squadmate skill spread: some are dead weight, some carry hard.
+    const skill = 0.15 + Math.random() * 0.85;
     if (isPlayer) {
       char = new R15Character({ name, avatar, nameTagColor: '#8fd3ff' });
       ctrl = new CharController({ speed: 18 });
     } else {
-      bot = new BotBase(persona, { nameTagColor: '#8fd3ff', ctrl: { speed: 17 } });
+      bot = new BotBase(persona, { nameTagColor: '#8fd3ff', ctrl: { speed: 15 + skill * 4 } });
       char = bot.char;
       ctrl = bot.ctrl;
     }
@@ -124,7 +126,7 @@ export default async function launch({ root, user, game }) {
       hp: 100, alive: true, downed: false, points: isPlayer ? 500 : 500,
       kills: 0, guns: { pistol: new GunState('pistol') }, gun: null, weaponId: 'pistol',
       hurtT: 0,
-      ai: bot ? { target: null, retargetT: 0, fireT: 0, skill: 0.5 + Math.random() * 0.4, boughtAR: false } : null,
+      ai: bot ? { target: null, retargetT: 0, fireT: 0, skill, boughtAR: false } : null,
     };
     if (bot) h.chat = chatter.register(name, bot.brain, char);
     equip(h, 'pistol');

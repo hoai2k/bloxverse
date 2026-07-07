@@ -106,8 +106,12 @@ export class GameApp {
     const len = Math.hypot(mv.x, mv.z);
     if (len < 0.001) { out.set(0, 0, 0); return out; }
     const nx = mv.x / Math.max(1, len), nz = mv.z / Math.max(1, len);
+    // Camera-relative basis on the XZ plane. Input is: -z = forward (W /
+    // joystick-up, into the screen), +x = strafe right.
     const sin = Math.sin(this.camYaw), cos = Math.cos(this.camYaw);
-    out.set(nx * cos - nz * sin, 0, -nz * cos - nx * sin);
+    const fwd = -nz;                       // amount of "into the screen"
+    // forward = (-sin, -cos), right = (cos, -sin)
+    out.set(cos * nx - sin * fwd, 0, -sin * nx - cos * fwd);
     // preserve analog magnitude (joystick)
     if (len < 1) out.multiplyScalar(len);
     return out;

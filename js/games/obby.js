@@ -219,12 +219,15 @@ export default async function launch({ root, user, game }) {
 
   const personas = pickBots(5);
   const racers = personas.map((p) => {
-    const b = new BotBase(p, { ctrl: { speed: 14.5 + Math.random() * 1.5 } });
+    // Wide skill spread: clumsy racers (fall a lot, slower) up to near-flawless
+    // speedrunners. Skill drives both fall chance and run pace.
+    const skill = 0.3 + Math.random() * 0.68;        // 0.3 .. 0.98
+    const b = new BotBase(p, { ctrl: { speed: 12.5 + skill * 4.5 } });
     scene.add(b.char.group);
     b.chat = chatter.register(p.name, b.brain, b.char);
     b.stage = 1;
     b.wpIndex = 0;
-    b.skill = 0.55 + Math.random() * 0.4;
+    b.skill = skill;
     b.slipT = 0;
     b.deadT = 0;
     b.won = false;

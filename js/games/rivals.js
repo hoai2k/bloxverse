@@ -106,11 +106,15 @@ export default async function launch({ root, user, game }) {
     if (!name && persona) name = persona.name;
     let char, ctrl, bot = null;
     const tagColor = TEAM[team].color;
+    // Per-bot skill tier — wide spread so some are clearly cracked and some
+    // are clearly fodder. Drives aim, reaction and movement together.
+    const skill = 0.1 + Math.random() * 0.9;         // 0.1 (bot) .. 1.0 (pro)
+    const moveMul = 0.82 + skill * 0.36;             // weak bots slower, pros faster
     if (isPlayer) {
       char = new R15Character({ name, avatar, nameTagColor: tagColor });
       ctrl = new CharController({ speed: MOVE_SPEED });
     } else {
-      bot = new BotBase(persona, { nameTagColor: tagColor, ctrl: { speed: MOVE_SPEED * (0.85 + Math.random() * 0.15) } });
+      bot = new BotBase(persona, { nameTagColor: tagColor, ctrl: { speed: MOVE_SPEED * moveMul } });
       char = bot.char;
       ctrl = bot.ctrl;
     }
@@ -121,7 +125,7 @@ export default async function launch({ root, user, game }) {
       guns: { ar: new GunState('ar'), shotgun: new GunState('shotgun'), sniper: new GunState('sniper'), pistol: new GunState('pistol') },
       gun: null, weaponId: 'ar', lastHitBy: null,
       ai: bot ? {
-        skill: 0.35 + Math.random() * 0.5, // accuracy/reaction quality
+        skill,                                       // accuracy/reaction quality
         target: null, retargetT: 0, waypoint: null, wpT: 0, burstT: 0, fireT: 0,
         pref: ['ar', 'ar', 'shotgun', 'sniper'][Math.floor(Math.random() * 4)],
       } : null,

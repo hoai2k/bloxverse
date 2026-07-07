@@ -111,12 +111,17 @@ export default async function launch({ root, user, game }) {
       cds: { rush: 0, barrage: 0, slam: 0, blast: 0, dash: 0 },
       barrageT: 0, respawnT: 0, lastHitBy: null, yaw: 0,
       aura: 0,
-      // bot combat brain params
-      ai: bot ? {
-        reaction: 0.15 + Math.random() * 0.4,
-        aggression: 0.45 + Math.random() * 0.5,
-        retargetT: 0, target: null, thinkT: 0, retreatT: 0,
-      } : null,
+      // bot combat brain params — one wide skill tier drives reaction speed
+      // and aggression together, so fighters range from clumsy to menacing.
+      ai: bot ? (() => {
+        const skill = Math.random();                 // 0 (scrub) .. 1 (demon)
+        return {
+          skill,
+          reaction: 0.6 - skill * 0.48,              // 0.6s slow .. 0.12s twitch
+          aggression: 0.3 + skill * 0.65,            // 0.3 passive .. 0.95 relentless
+          retargetT: 0, target: null, thinkT: 0, retreatT: 0,
+        };
+      })() : null,
     };
     if (bot) {
       brainEntry = chatter.register(name, bot.brain, char);
