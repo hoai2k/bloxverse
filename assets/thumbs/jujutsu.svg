@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b1a4d"/><stop offset="1" stop-color="#7a4dbb"/>
+    </linearGradient>
+    <radialGradient id="orb" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e7c6ff"/><stop offset="0.55" stop-color="#a855f7"/><stop offset="1" stop-color="#6b21a8"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <!-- city silhouette -->
+  <g fill="#1e1436">
+    <rect x="0" y="220" width="80" height="292"/><rect x="90" y="170" width="70" height="342"/>
+    <rect x="330" y="150" width="80" height="362"/><rect x="420" y="210" width="92" height="302"/>
+  </g>
+  <g fill="#f5d76e" opacity="0.75">
+    <rect x="14" y="240" width="12" height="12"/><rect x="42" y="270" width="12" height="12"/><rect x="14" y="310" width="12" height="12"/>
+    <rect x="104" y="190" width="12" height="12"/><rect x="132" y="220" width="12" height="12"/><rect x="104" y="260" width="12" height="12"/>
+    <rect x="344" y="180" width="12" height="12"/><rect x="374" y="210" width="12" height="12"/><rect x="344" y="260" width="12" height="12"/>
+    <rect x="440" y="240" width="12" height="12"/><rect x="470" y="280" width="12" height="12"/>
+  </g>
+  <!-- ground -->
+  <rect x="0" y="430" width="512" height="82" fill="#3c3f43"/>
+  <rect x="0" y="424" width="512" height="10" fill="#54585e"/>
+  <!-- purple energy orb -->
+  <circle cx="368" cy="200" r="66" fill="url(#orb)"/>
+  <circle cx="368" cy="200" r="86" fill="none" stroke="#c084fc" stroke-width="5" opacity="0.6"/>
+  <circle cx="368" cy="200" r="104" fill="none" stroke="#c084fc" stroke-width="2.5" opacity="0.3"/>
+  <!-- caster figure (right) -->
+  <g>
+    <rect x="300" y="292" width="34" height="44" rx="6" fill="#22262a"/>
+    <rect x="288" y="296" width="14" height="38" rx="6" fill="#f5cd30" transform="rotate(36 295 315)"/>
+    <rect x="332" y="284" width="14" height="40" rx="6" fill="#f5cd30" transform="rotate(-58 339 304)"/>
+    <rect x="302" y="336" width="14" height="36" rx="5" fill="#2d3138"/>
+    <rect x="319" y="336" width="14" height="36" rx="5" fill="#2d3138"/>
+    <rect x="302" y="256" width="32" height="32" rx="8" fill="#f5cd30"/>
+    <rect x="309" y="266" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <rect x="322" y="266" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <path d="M311 280 q6 4 13 0" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- lunging fighter (left) -->
+  <g transform="rotate(-9 150 330)">
+    <rect x="120" y="296" width="36" height="46" rx="6" fill="#c22f2f"/>
+    <rect x="150" y="300" width="42" height="15" rx="7" fill="#fdc180"/>
+    <rect x="96" y="308" width="34" height="14" rx="7" fill="#fdc180"/>
+    <rect x="118" y="342" width="15" height="38" rx="6" fill="#274a8a" transform="rotate(14 125 360)"/>
+    <rect x="140" y="342" width="15" height="38" rx="6" fill="#274a8a" transform="rotate(-16 148 360)"/>
+    <rect x="122" y="258" width="34" height="34" rx="9" fill="#fdc180"/>
+    <path d="M128 268 l8 5 M156 268 l-8 5" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+    <rect x="131" y="275" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <rect x="144" y="275" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <path d="M133 290 q7 -4 14 0" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- speed lines & sparks -->
+  <g stroke="#e9d5ff" stroke-width="4" stroke-linecap="round" opacity="0.85">
+    <path d="M40 300 h52"/><path d="M28 330 h40"/><path d="M52 360 h60"/>
+  </g>
+  <g fill="#ffd166">
+    <path d="M212 300 l7 -16 7 16 16 7 -16 7 -7 16 -7 -16 -16 -7z"/>
+    <path d="M240 356 l4 -10 4 10 10 4 -10 4 -4 10 -4 -10 -10 -4z" opacity="0.8"/>
+  </g>
+  <!-- title chip -->
+  <rect x="26" y="26" width="250" height="52" rx="12" fill="rgba(0,0,0,0.45)"/>
+  <text x="46" y="61" font-family="Arial, sans-serif" font-size="30" font-weight="900" fill="#e9d5ff">JUJUTSU ⚡</text>
+</svg>

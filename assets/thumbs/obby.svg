@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4dabf7"/><stop offset="1" stop-color="#c5e8ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <!-- clouds -->
+  <g fill="#ffffff" opacity="0.9">
+    <ellipse cx="90" cy="120" rx="64" ry="22"/><ellipse cx="130" cy="104" rx="40" ry="18"/>
+    <ellipse cx="420" cy="70" rx="56" ry="20"/><ellipse cx="380" cy="86" rx="36" ry="16"/>
+    <ellipse cx="330" cy="420" rx="70" ry="24"/><ellipse cx="120" cy="460" rx="80" ry="26"/>
+  </g>
+  <!-- lava bottom -->
+  <rect x="0" y="486" width="512" height="26" fill="#e03131"/>
+  <path d="M0 486 q32 -14 64 0 q32 14 64 0 q32 -14 64 0 q32 14 64 0 q32 -14 64 0 q32 14 64 0 q32 -14 64 0 q32 14 64 0 v26 h-512z" fill="#c92a2a"/>
+  <!-- platforms spiral -->
+  <g stroke-width="0">
+    <rect x="60" y="430" width="90" height="26" rx="6" fill="#ff6b6b"/>
+    <rect x="190" y="386" width="80" height="26" rx="6" fill="#ffa94d"/>
+    <rect x="310" y="340" width="80" height="26" rx="6" fill="#ffd43b"/>
+    <rect x="200" y="288" width="80" height="26" rx="6" fill="#e03131"/>
+    <rect x="90" y="238" width="80" height="26" rx="6" fill="#69db7c"/>
+    <rect x="210" y="188" width="80" height="26" rx="6" fill="#4dabf7"/>
+    <rect x="330" y="150" width="80" height="26" rx="6" fill="#da77f2"/>
+  </g>
+  <!-- kill brick glow -->
+  <rect x="200" y="288" width="80" height="26" rx="6" fill="#e03131"/>
+  <rect x="206" y="292" width="68" height="8" rx="4" fill="#ff8787" opacity="0.8"/>
+  <!-- spinner -->
+  <g transform="translate(250 176)">
+    <rect x="-64" y="-7" width="128" height="14" rx="7" fill="#e03131" transform="rotate(24)"/>
+    <circle r="10" fill="#862e2e"/>
+  </g>
+  <!-- summit flag -->
+  <rect x="368" y="96" width="7" height="56" fill="#dee2e6"/>
+  <polygon points="375,96 428,110 375,124" fill="#ffd43b"/>
+  <!-- jumping runner -->
+  <g transform="rotate(8 150 340)">
+    <rect x="128" y="330" width="36" height="46" rx="7" fill="#7b3fd4"/>
+    <rect x="112" y="306" width="14" height="40" rx="6" fill="#f2b8c6" transform="rotate(34 119 326)"/>
+    <rect x="166" y="306" width="14" height="40" rx="6" fill="#f2b8c6" transform="rotate(-34 173 326)"/>
+    <rect x="128" y="374" width="15" height="34" rx="6" fill="#22262a" transform="rotate(18 135 391)"/>
+    <rect x="150" y="374" width="15" height="34" rx="6" fill="#22262a" transform="rotate(-22 157 391)"/>
+    <rect x="129" y="294" width="34" height="34" rx="9" fill="#f2b8c6"/>
+    <rect x="137" y="304" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <rect x="150" y="304" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <path d="M138 319 q7 5 15 0" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  </g>
+  <rect x="26" y="26" width="240" height="52" rx="12" fill="rgba(0,0,0,0.4)"/>
+  <text x="46" y="61" font-family="Arial, sans-serif" font-size="29" font-weight="900" fill="#fff">SKY OBBY ☁️</text>
+</svg>

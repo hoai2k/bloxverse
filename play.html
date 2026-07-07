@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>BLOXVERSE</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='8' width='48' height='48' rx='10' fill='%23f2f4f5' transform='rotate(-8 32 32)'/%3E%3Ctext x='32' y='45' font-size='36' font-weight='900' font-family='Arial' text-anchor='middle' fill='%231b1d1f'%3EB%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/play.css" />
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body class="playing">
+  <!-- Loading screen -->
+  <div id="loadScreen">
+    <div class="load-logo"><span class="tilt">B</span> BLOXVERSE</div>
+    <div class="load-game" id="loadGameName"></div>
+    <div class="load-spinner"></div>
+    <div class="load-tip" id="loadTip"></div>
+  </div>
+  <div id="gameRoot"></div>
+  <script type="module">
+    import { getGame } from './js/site/catalog.js';
+    import { ensureUser, markRecent } from './js/site/common.js';
+
+    const params = new URLSearchParams(location.search);
+    const id = params.get('g') || 'jujutsu';
+    const game = getGame(id);
+    if (!game) location.href = 'index.html';
+    document.title = `${game.name} — BLOXVERSE`;
+    document.getElementById('loadGameName').textContent = game.name;
+
+    const TIPS = [
+      'Tip: Hold right-click and drag to rotate the camera.',
+      'Tip: Scroll to zoom the camera in and out.',
+      'Tip: Press / to chat. The other players WILL talk back.',
+      'Tip: Earn Blux in every game and spend it on hats in the Avatar shop.',
+      'Tip: On mobile, drag the right side of the screen to look around.',
+      'Tip: Press Esc to open the menu at any time.',
+      'Tip: Customize your character on the Avatar page — it carries into every game.',
+    ];
+    const tipEl = document.getElementById('loadTip');
+    let tipIdx = Math.floor(Math.random() * TIPS.length);
+    tipEl.textContent = TIPS[tipIdx];
+    const tipTimer = setInterval(() => { tipEl.textContent = TIPS[++tipIdx % TIPS.length]; }, 2600);
+
+    (async () => {
+      const user = await ensureUser();
+      markRecent(id);
+      try {
+        const mod = await import(`./js/games/${id}.js`);
+        await mod.default({ root: document.getElementById('gameRoot'), user, game });
+        clearInterval(tipTimer);
+        const ls = document.getElementById('loadScreen');
+        ls.style.opacity = '0';
+        setTimeout(() => ls.remove(), 450);
+      } catch (err) {
+        console.error(err);
+        tipEl.textContent = 'Failed to load game: ' + err.message;
+        tipEl.style.color = '#f74d59';
+      }
+    })();
+  </script>
+</body>
+</html>

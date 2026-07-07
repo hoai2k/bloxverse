@@ -1,0 +1,9 @@
+{
+  "name": "bloxverse",
+  "version": "1.0.0",
+  "description": "Fan-made browser game platform with AI players and mood-driven chat. No backend, no build step.",
+  "scripts": {
+    "start": "npx -y http-server -p 8080 -c-1 ."
+  },
+  "private": true
+}

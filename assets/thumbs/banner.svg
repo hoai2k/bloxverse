@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360">
+  <defs>
+    <linearGradient id="bsky" x1="0" y1="0" x2="1" y2="0.4">
+      <stop offset="0" stop-color="#1a1030"/><stop offset="0.5" stop-color="#4a2a7a"/><stop offset="1" stop-color="#7a4dbb"/>
+    </linearGradient>
+    <radialGradient id="borb" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e7c6ff"/><stop offset="0.55" stop-color="#a855f7"/><stop offset="1" stop-color="#6b21a8"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="360" fill="url(#bsky)"/>
+  <!-- skyline -->
+  <g fill="#160f28">
+    <rect x="640" y="90" width="110" height="270"/><rect x="770" y="140" width="90" height="220"/>
+    <rect x="880" y="60" width="130" height="300"/><rect x="1030" y="120" width="100" height="240"/>
+    <rect x="1150" y="80" width="130" height="280"/>
+  </g>
+  <g fill="#f5d76e" opacity="0.7">
+    <rect x="660" y="110" width="14" height="14"/><rect x="700" y="150" width="14" height="14"/><rect x="660" y="200" width="14" height="14"/>
+    <rect x="900" y="90" width="14" height="14"/><rect x="950" y="130" width="14" height="14"/><rect x="900" y="180" width="14" height="14"/>
+    <rect x="1050" y="150" width="14" height="14"/><rect x="1180" y="110" width="14" height="14"/><rect x="1220" y="170" width="14" height="14"/>
+  </g>
+  <rect x="0" y="300" width="1280" height="60" fill="#2c2438"/>
+  <rect x="0" y="292" width="1280" height="12" fill="#453a58"/>
+  <!-- energy orb -->
+  <circle cx="1000" cy="180" r="85" fill="url(#borb)"/>
+  <circle cx="1000" cy="180" r="112" fill="none" stroke="#c084fc" stroke-width="6" opacity="0.55"/>
+  <circle cx="1000" cy="180" r="136" fill="none" stroke="#c084fc" stroke-width="3" opacity="0.28"/>
+  <!-- fighter silhouettes -->
+  <g transform="translate(700 120) rotate(-8)">
+    <rect x="0" y="60" width="48" height="62" rx="9" fill="#c22f2f"/>
+    <rect x="40" y="66" width="54" height="19" rx="9" fill="#fdc180"/>
+    <rect x="-30" y="76" width="42" height="18" rx="9" fill="#fdc180"/>
+    <rect x="2" y="122" width="20" height="52" rx="8" fill="#274a8a" transform="rotate(12 12 148)"/>
+    <rect x="28" y="122" width="20" height="52" rx="8" fill="#274a8a" transform="rotate(-14 38 148)"/>
+    <rect x="2" y="10" width="44" height="44" rx="12" fill="#fdc180"/>
+    <rect x="12" y="24" width="6" height="12" rx="3" fill="#1a1a1a"/>
+    <rect x="30" y="24" width="6" height="12" rx="3" fill="#1a1a1a"/>
+    <path d="M13 44 q9 -6 20 0" stroke="#1a1a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(1090 130)">
+    <rect x="0" y="60" width="44" height="58" rx="8" fill="#22262a"/>
+    <rect x="-26" y="66" width="30" height="17" rx="8" fill="#d5d8dd" transform="rotate(30 -11 74)"/>
+    <rect x="40" y="50" width="17" height="52" rx="8" fill="#d5d8dd" transform="rotate(-55 48 76)"/>
+    <rect x="2" y="118" width="18" height="48" rx="7" fill="#2d3138"/>
+    <rect x="24" y="118" width="18" height="48" rx="7" fill="#2d3138"/>
+    <rect x="2" y="14" width="40" height="40" rx="11" fill="#d5d8dd"/>
+    <path d="M9 26 l10 6 M35 26 l-10 6" stroke="#1a1a1a" stroke-width="3.4" stroke-linecap="round"/>
+    <rect x="12" y="34" width="6" height="11" rx="3" fill="#1a1a1a"/>
+    <rect x="27" y="34" width="6" height="11" rx="3" fill="#1a1a1a"/>
+    <path d="M14 52 q8 -5 17 0" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- sparks -->
+  <g fill="#ffd166">
+    <path d="M860 210 l9 -20 9 20 20 9 -20 9 -9 20 -9 -20 -20 -9z"/>
+    <path d="M920 260 l5 -12 5 12 12 5 -12 5 -5 12 -5 -12 -12 -5z" opacity="0.8"/>
+  </g>
+  <g stroke="#e9d5ff" stroke-width="5" stroke-linecap="round" opacity="0.8">
+    <path d="M560 160 h70"/><path d="M540 200 h50"/><path d="M580 240 h80"/>
+  </g>
+</svg>
