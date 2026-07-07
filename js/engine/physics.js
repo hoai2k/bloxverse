@@ -140,29 +140,53 @@ export class CharController {
     this.#moveAxis(cols, 'x', this.vel.x * dt);
     // --- Z axis ---
     this.#moveAxis(cols, 'z', this.vel.z * dt);
-    // --- Y axis ---
+
+    // --- Y axis (SWEPT: catches the crossing no matter how large the frame
+    // step is, so a slow first frame on mobile can never tunnel the player
+    // through the floor). X/Z are already resolved, so XZ overlap is exact. ---
+    const prevFeet = this.pos.y;
     const dy = this.vel.y * dt;
-    this.pos.y += dy;
+    this.pos.y = prevFeet + dy;
     this.grounded = false;
     this.groundCol = null;
-    this.box(_box);
-    for (const col of cols) {
-      if (!col.enabled || !col.solid || col.obb) continue;
-      if (!_box.intersectsBox(col.box)) continue;
-      if (dy <= 0 && _box.min.y < col.box.max.y && _box.min.y > col.box.max.y + dy - 0.5) {
-        // landed on top
-        this.pos.y = col.box.max.y;
+    const REST = 0.5; // tolerance for staying glued to a surface
+
+    if (this.vel.y <= 0) {
+      // Landing: among every solid top we crossed (feet were at/above it and
+      // are now at/below it), snap to the HIGHEST one.
+      let landY = -Infinity, landCol = null;
+      for (const col of cols) {
+        if (!col.enabled || !col.solid || col.obb) continue;
+        if (!this.#overlapXZ(col)) continue;
+        const top = col.box.max.y;
+        if (prevFeet >= top - REST && this.pos.y <= top && top > landY) {
+          landY = top; landCol = col;
+        }
+      }
+      if (landCol) {
+        this.pos.y = landY;
         this.vel.y = 0;
         this.grounded = true;
-        this.groundCol = col;
-        this.box(_box);
-      } else if (dy > 0 && _box.max.y > col.box.min.y && _box.max.y < col.box.min.y + dy + 0.5) {
-        // bonked head
-        this.pos.y = col.box.min.y - this.height;
+        this.groundCol = landCol;
+      }
+    } else {
+      // Rising: bonk the lowest ceiling we crossed.
+      let hitY = Infinity;
+      const prevHead = prevFeet + this.height;
+      for (const col of cols) {
+        if (!col.enabled || !col.solid || col.obb) continue;
+        if (!this.#overlapXZ(col)) continue;
+        const bottom = col.box.min.y;
+        if (prevHead <= bottom + REST && this.pos.y + this.height >= bottom && bottom < hitY) {
+          hitY = bottom;
+        }
+      }
+      if (hitY !== Infinity) {
+        this.pos.y = hitY - this.height;
         this.vel.y = 0;
-        this.box(_box);
       }
     }
+    this.box(_box);
 
     // --- touch collection (kill bricks, checkpoints, zones, OBBs) ---
     this.touching.length = 0;
@@ -186,18 +210,33 @@ export class CharController {
     for (const col of cols) {
       if (!col.enabled || !col.solid || col.obb) continue;
       if (!_box.intersectsBox(col.box)) continue;
-      // walking over low ledges: auto step-up
+      // How far the collider's top rises above our feet.
       const stepUp = col.box.max.y - this.pos.y;
-      if (this.grounded && stepUp > 0 && stepUp <= this.stepHeight && this.#headroom(cols, col.box.max.y)) {
+      // A surface at (or below, within tolerance of) our feet is a FLOOR we are
+      // standing on — not a wall. Never shove the player sideways out of it,
+      // or they get flung off the edge of the ground plane. This is the fix
+      // for "falling through the floor" (esp. on a slow first mobile frame,
+      // where the feet sink a hair below the ground top).
+      if (stepUp <= 0.2) continue;
+      // A low ledge we can walk straight up onto.
+      if (stepUp <= this.stepHeight && (this.grounded || this.vel.y <= 0) && this.#headroom(cols, col.box.max.y)) {
         this.pos.y = col.box.max.y;
         this.box(_box);
         continue;
       }
-      // push out
+      // Otherwise it is a real wall: push out horizontally.
       if (delta > 0) this.pos[axis] = col.box.min[axis] - this.halfW - 0.001;
       else this.pos[axis] = col.box.max[axis] + this.halfW + 0.001;
       this.box(_box);
     }
+  }
+
+  // Does the player's footprint overlap this collider on the XZ plane?
+  #overlapXZ(col) {
+    return this.pos.x + this.halfW > col.box.min.x &&
+      this.pos.x - this.halfW < col.box.max.x &&
+      this.pos.z + this.halfW > col.box.min.z &&
+      this.pos.z - this.halfW < col.box.max.z;
   }
 
   #headroom(cols, floorY) {

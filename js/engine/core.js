@@ -69,6 +69,7 @@ export class GameApp {
     this.camTargetY = 4.4;
     this.followTarget = null;              // Object3D or {position}
     this._shake = 0;
+    if (typeof window !== 'undefined') window.__bvApp = this; // debug handle
 
     this._updates = [];
     this._clock = new THREE.Clock();
@@ -221,10 +222,14 @@ export class GameApp {
     if (this._running) return;
     this._running = true;
     this._clock.start();
+    let warmup = 3; // first frames after load can be huge (shader compile,
+                    // texture upload) — feed the sim a tiny, safe step until
+                    // the frame rate settles so nothing tunnels or lurches.
     const loop = () => {
       if (!this._running) return;
       requestAnimationFrame(loop);
-      const dt = Math.min(0.05, this._clock.getDelta());
+      let dt = Math.min(0.05, this._clock.getDelta());
+      if (warmup > 0) { warmup--; dt = Math.min(dt, 1 / 60); }
       this.time += dt;
       for (const fn of this._updates) fn(dt, this.time);
       for (let i = this._effects.length - 1; i >= 0; i--) {
