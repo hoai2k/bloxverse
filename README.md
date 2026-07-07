@@ -49,6 +49,26 @@ drives a procedural chat engine (`js/engine/chatbrain.js`):
 
 No network calls, no API keys — it's all deterministic-ish text generation in the browser.
 
+## 🌐 Online multiplayer (InstantDB)
+
+Bloxverse is multiplayer out of the box, powered by [InstantDB](https://instantdb.com)
+rooms — no game server, no build step, still a fully static site:
+
+- **Accounts are just usernames** (built for friend groups): the sign-in screen lists
+  existing names to pick from, lets you create a new one, and can 🗑 delete accounts.
+  Your avatar and Blux follow your username across devices.
+- **Presence-based netcode** — each client owns its character and publishes position /
+  animation / HP ~10×/s into a per-game room; everyone else renders interpolated avatars.
+  Chat, damage and deaths travel as room topics (damage is victim-authoritative — the
+  right trust model for friends).
+- **Co-op horde in Zombie Blocks** — the longest-connected player hosts the horde and
+  streams a compact snapshot; others render proxies and send hit events. Host migrates
+  automatically if they leave.
+- **Bots step aside when friends join** (each client simulates its own bots, so keeping
+  them would show everyone a different copy) — and come back when you're alone.
+- **Offline still works**: every network call is guarded with timeouts and fallbacks.
+  No connection → local accounts, bots-only games, exactly as before.
+
 ## 📱 Mobile
 
 Full touch support in every game, platform-style: dynamic left thumbstick, drag-to-look,

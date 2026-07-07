@@ -11,6 +11,7 @@ import { CharController, distXZ } from '../engine/physics.js';
 import { pickBots, BotBase, ChatterManager } from '../engine/bots.js';
 import { sfx } from '../engine/sfx.js';
 import { addBlux } from '../site/common.js';
+import { createGameNet } from '../engine/netplay.js';
 import * as W from '../engine/world.js';
 
 const SAVE_KEY = 'bloxverse_bloxburg_v1';
@@ -140,6 +141,7 @@ export default async function launch({ root, user, game }) {
   });
   const { scene, world, input, ui, camera } = app;
   world.killY = -40;
+  let net = null; // multiplayer (wired up further below)
 
   // ================= save state =================
   let save;
@@ -289,6 +291,9 @@ export default async function launch({ root, user, game }) {
   const refreshBoard = () => {
     ui.board(user.name, ['$' + Math.floor(save.money).toLocaleString()], { isPlayer: true, color: '#fff' });
     neighbors.forEach((n, i) => ui.board(n.name, ['$' + (1200 + i * 730).toLocaleString()]));
+    if (net) for (const rp of net.remotes.values()) {
+      ui.board(rp.name, ['$' + (rp.stats.money ?? 0).toLocaleString()], { color: '#8fd3ff' });
+    }
   };
   refreshBoard();
   ui.setHealth(100, 100);
@@ -684,7 +689,25 @@ export default async function launch({ root, user, game }) {
     }
   }
 
-  app.onChatSend((t) => chatter.onPlayerMessage(t));
+  app.onChatSend((t) => { chatter.onPlayerMessage(t); net?.sendChat(t); });
+
+  // ================= MULTIPLAYER =================
+  // Friends stroll the same neighborhood: shared presence avatars + chat.
+  // Houses stay personal (saved per account); AI neighbors remain — they're
+  // ambient scenery, so everyone keeping their own is harmless.
+  createGameNet({
+    scene, ui, gameId: 'bloxburg', user,
+    localState: () => ({
+      x: ctrl.pos.x, y: ctrl.pos.y, z: ctrl.pos.z,
+      ry: playerChar.group.rotation.y,
+      sp: Math.hypot(ctrl.vel.x, ctrl.vel.z), gr: ctrl.grounded, vy: ctrl.vel.y,
+      hp: 100, stats: { money: Math.floor(save.money) },
+    }),
+    onPeersChanged: () => refreshBoard(),
+  }).then((gn) => {
+    net = gn;
+    if (net.online) ui.system('🌐 Online — your friends can visit Bloxville too!');
+  });
 
   setTimeout(() => {
     neighbors.slice(0, 2).forEach((n, i) => chatter.botSay(n.chat, 'spawn', {}, 0.8, 0.6 + i * 1.7));
@@ -749,6 +772,9 @@ export default async function launch({ root, user, game }) {
         ghost.rotation.y = ghostRot * Math.PI / 2;
       } else ghost.visible = false;
     }
+
+    // multiplayer: interpolate visiting friends + publish our stroll
+    net?.tick(dt);
 
     ui.updatePrompts(dt, camera, ctrl.pos, input.keys);
   });

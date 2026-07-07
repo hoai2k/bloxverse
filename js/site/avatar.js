@@ -1,6 +1,7 @@
 // BLOXVERSE — avatar editor page (3D preview + customization + hat shop)
 import * as THREE from 'three';
-import { initShell, footer, getUser, saveUser, drawHeadshot, toast } from './common.js';
+import { initShell, footer, getUser, saveUser, drawHeadshot, toast, signOut } from './common.js';
+import { deleteProfile } from '../engine/net.js';
 import { fmtCount } from './catalog.js';
 import { R15Character, HATS, HAT_PRICES, FACES } from '../engine/character.js';
 
@@ -28,6 +29,13 @@ async function boot() {
       <div class="av-section"><h4>Face</h4><div class="chips" id="chFace"></div></div>
       <div class="av-section"><h4>Hats <span style="color:var(--text-3);font-weight:400;text-transform:none">— buy with Blux earned in games</span></h4><div class="chips" id="chHat"></div></div>
       <button class="av-save" id="avSave">Save Avatar</button>
+      <div class="av-section" style="margin-top:16px;border-top:1px solid var(--stroke);padding-top:14px">
+        <h4>Account — ${user.name}</h4>
+        <div class="chips">
+          <button class="chip" id="avSwitch">🔁 Switch account</button>
+          <button class="chip" id="avDelete" style="border-color:var(--red);color:var(--red)">🗑 Delete account</button>
+        </div>
+      </div>
     </div>`;
   main.appendChild(wrap);
   main.appendChild(footer());
@@ -164,6 +172,18 @@ async function boot() {
     saveBtn.classList.add('saved');
     saveBtn.textContent = '✓ Saved!';
     toast('Avatar saved — it will appear in all games.');
+  });
+
+  // ---------- account controls ----------
+  document.getElementById('avSwitch').addEventListener('click', () => {
+    if (confirm('Switch account? Your progress is saved to your username.')) signOut();
+  });
+  document.getElementById('avDelete').addEventListener('click', async () => {
+    if (!confirm(`Delete the account "${user.name}" forever? This can't be undone.`)) return;
+    await deleteProfile(user.name);
+    localStorage.removeItem('bloxverse_user_v1');
+    toast('Account deleted.');
+    setTimeout(() => location.href = 'index.html', 600);
   });
 }
 

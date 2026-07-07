@@ -11,6 +11,7 @@ import { pickBots, BotBase, ChatterManager } from '../engine/bots.js';
 import { WEAPONS, buildGunMesh, hitscan, spreadDir, spawnMuzzleFlash, GunState } from '../engine/guns.js';
 import { sfx } from '../engine/sfx.js';
 import { addBlux } from '../site/common.js';
+import { createGameNet } from '../engine/netplay.js';
 import * as W from '../engine/world.js';
 
 const TEAM = {
@@ -144,6 +145,113 @@ export default async function launch({ root, user, game }) {
   personas.slice(3, 7).forEach((p) => makeFighter({ persona: p, isPlayer: false, team: 'teal' }));
   chatter.playerChar = player.char;
 
+  // ================= MULTIPLAYER =================
+  // Humans get deterministic, balanced teams: sort every human name and
+  // alternate orange/teal — every client computes the same assignment.
+  // Damage between humans is victim-authoritative via 'hit' topics; each
+  // death is announced once by its victim, so scores converge everywhere.
+  let net = null;
+  const remoteFighters = [];
+  const combatants = () => {
+    const out = [];
+    for (const f of fighters) if (!f.benched) out.push(f);
+    for (const r of remoteFighters) { r.alive = r.rp.alive; out.push(r); }
+    return out;
+  };
+  function setBotsBenched(on) {
+    for (const f of fighters) {
+      if (!f.bot || !!f.benched === on) continue;
+      f.benched = on;
+      f.char.group.visible = !on;
+      if (on) { f.alive = false; ui.removeBoardRow(f.name); }
+      else respawn(f);
+    }
+    ui.system(on ? 'Real players are here — the bots stepped aside!' : 'All alone again... the bots are back.');
+    refreshBoard();
+  }
+  function reassignTeams() {
+    const names = [user.name, ...[...net.remotes.values()].map((r) => r.name)].sort();
+    const teamAt = (n) => names.indexOf(n) % 2 === 0 ? 'orange' : 'teal';
+    const myTeam = teamAt(user.name);
+    if (myTeam !== player.team) {
+      player.team = myTeam;
+      player.char.nameTagColor = TEAM[myTeam].color;
+      player.char.refreshNameTag();
+      const p = spawnPointFor(myTeam);
+      player.ctrl.teleport(p.x, p.y, p.z);
+      ui.announce(`You're on ${TEAM[myTeam].name} team!`, '', 2);
+    }
+    for (const r of remoteFighters) {
+      r.team = teamAt(r.name);
+      r.rp.char.nameTagColor = TEAM[r.team].color;
+      r.rp.char.refreshNameTag();
+    }
+  }
+  function applyRemoteHit(d) {
+    if (!player.alive || phase !== 'play') return;
+    player.hp -= d.dmg || 0;
+    player.char.setHealth(player.hp);
+    ui.damageFlash();
+    ui.setHealth(player.hp, 100);
+    refreshWeaponUI();
+    if (player.hp <= 0) {
+      player.alive = false;
+      player.deaths++;
+      player.char.breakApart(scene, 0);
+      sfx.play('oof');
+      player.respawnT = 4;
+      ui.respawnScreen(true, 'Respawning in 4...');
+      net?.sendDied({ killer: d.from || 'Player', victim: user.name, vteam: player.team, head: !!d.head });
+      applyScoredDeath(d.from || 'Player', user.name, player.team, !!d.head, null);
+    }
+  }
+  // one death event = one score tick, on every client
+  function applyScoredDeath(killerName, victimName, victimTeam, head, killerPeerId) {
+    const killerTeam = victimTeam === 'orange' ? 'teal' : 'orange';
+    score[killerTeam]++;
+    ui.killfeed(killerName, victimName, head ? '🎯' : '💥', TEAM[killerTeam].color, TEAM[victimTeam].color);
+    if (killerPeerId && killerPeerId === net?.room?.peerId) {
+      player.kills++;
+      addBlux(3);
+      sfx.play('kill', { volume: 0.6 });
+    }
+    refreshBoard();
+    updatePills();
+    if (score[killerTeam] >= ROUND_KILLS && phase === 'play') endRound(killerTeam);
+  }
+  createGameNet({
+    scene, ui, gameId: 'rivals', user,
+    localState: () => ({
+      x: player.ctrl.pos.x, y: player.ctrl.pos.y, z: player.ctrl.pos.z,
+      ry: player.char.group.rotation.y,
+      sp: Math.hypot(player.ctrl.vel.x, player.ctrl.vel.z), gr: player.ctrl.grounded, vy: player.ctrl.vel.y,
+      hp: player.hp, mhp: 100,
+      stats: { k: player.kills, d: player.deaths },
+      pose: player.char.holdPose,
+    }),
+    onHit: (d, fromPeer) => applyRemoteHit(d, fromPeer),
+    onPeerDied: (d, fromPeer) => {
+      const victim = net?.remotes.get(fromPeer);
+      applyScoredDeath(d.killer || 'Player', d.victim || victim?.name || 'Player', d.vteam || 'teal', !!d.head, d.by);
+    },
+    onPeersChanged: (count) => {
+      remoteFighters.length = 0;
+      for (const [pid, rp] of net.remotes) {
+        remoteFighters.push({ remote: true, peerId: pid, name: rp.name, rp, ctrl: rp.ctrl, alive: rp.alive, team: 'teal' });
+      }
+      reassignTeams();
+      setBotsBenched(count > 0);
+    },
+    topics: {
+      round: (d) => { if (phase === 'play' && d?.winner) endRound(d.winner); },
+    },
+  }).then((gn) => {
+    net = gn;
+    if (net.online) ui.system('🌐 Online — friends can join the arena!');
+    const origPlay = player.char.playAction.bind(player.char);
+    player.char.playAction = (name, dur) => { net.action(name, dur); origPlay(name, dur); };
+  });
+
   // camera follows a right-shoulder proxy
   const camProxy = { position: new THREE.Vector3() };
   app.followTarget = camProxy;
@@ -155,8 +263,14 @@ export default async function launch({ root, user, game }) {
   let phaseT = 0;
 
   ui.setBoard(['K', 'D']);
-  const refreshBoard = () => fighters.forEach((f) =>
-    ui.board(f.name, [f.kills, f.deaths], { isPlayer: f.isPlayer, color: TEAM[f.team].color }));
+  const refreshBoard = () => {
+    fighters.forEach((f) => {
+      if (!f.benched) ui.board(f.name, [f.kills, f.deaths], { isPlayer: f.isPlayer, color: TEAM[f.team].color });
+    });
+    if (net) for (const r of remoteFighters) {
+      ui.board(r.name, [r.rp.stats.k || 0, r.rp.stats.d || 0], { color: TEAM[r.team]?.color });
+    }
+  };
   refreshBoard();
   ui.setHealth(100, 100);
 
@@ -188,6 +302,16 @@ export default async function launch({ root, user, game }) {
   function dealDamage(att, tgt, dmg, headshot, point) {
     if (!tgt.alive || phase !== 'play') return;
     if (att.team === tgt.team && att !== tgt) return; // no friendly fire
+    // Remote player hit: only our own shots count (victim applies the damage
+    // on their client and announces the death — scores converge from that).
+    if (tgt.remote) {
+      if (!att.isPlayer || !net) return;
+      net.sendHit(tgt.peerId, { dmg: Math.round(dmg * 10) / 10, head: !!headshot, from: user.name, by: net.room.peerId });
+      ui.popup(camera, point || chestPos(tgt), `-${Math.round(dmg)}`, headshot ? '#ff5b5b' : '#ffd166', headshot ? 17 : 14);
+      ui.hitmarker(headshot);
+      if (headshot) sfx.play('headshot', { volume: 0.5 });
+      return;
+    }
     tgt.hp -= dmg;
     tgt.lastHitBy = att;
     tgt.char.setHealth(tgt.hp);
@@ -227,6 +351,8 @@ export default async function launch({ root, user, game }) {
   }
 
   function endRound(winner) {
+    if (phase !== 'play') return;
+    net?.sendTopic('round', { winner });
     phase = 'intermission';
     phaseT = 7;
     roundsWon[winner]++;
@@ -260,7 +386,7 @@ export default async function launch({ root, user, game }) {
   }
 
   // ---- firing ----
-  const targetsFor = (f) => fighters.filter((t) => t.team !== f.team);
+  const targetsFor = (f) => combatants().filter((t) => t.team !== f.team);
 
   function fireWeapon(f, aimOrigin, aimDir) {
     const g = f.gun;
@@ -326,7 +452,8 @@ export default async function launch({ root, user, game }) {
   }
   refreshWeaponUI();
 
-  app.onChatSend((t) => chatter.onPlayerMessage(t));
+  app.onChatSend((t) => { chatter.onPlayerMessage(t); net?.sendChat(t); });
+  let boardT = 0;
   app.onRespawnRequest(() => { if (player.alive) { player.hp = 0; kill(player, player, false); player.kills++; score[player.team]--; refreshBoard(); } });
 
   setTimeout(() => {
@@ -443,6 +570,7 @@ export default async function launch({ root, user, game }) {
 
     // ---- fighters ----
     for (const f of fighters) {
+      if (f.benched) continue;
       if (!f.alive) {
         f.respawnT -= dt;
         if (f.isPlayer) ui.respawnScreen(true, `Respawning in ${Math.max(0, f.respawnT).toFixed(1)}...`);
@@ -468,6 +596,23 @@ export default async function launch({ root, user, game }) {
       player.ctrl.pos.x + Math.cos(yaw) * 1.6,
       player.ctrl.pos.y,
       player.ctrl.pos.z - Math.sin(yaw) * 1.6);
+
+    // multiplayer: interpolate remotes, publish state, keep remote guns in sync
+    if (net) {
+      net.setExtra({ wpn: player.weaponId });
+      net.tick(dt);
+      for (const r of remoteFighters) {
+        const wpn = r.rp.extra?.wpn;
+        if (wpn && wpn !== r._wpn && WEAPONS[wpn]) {
+          r._wpn = wpn;
+          r.rp.char.holdItem(buildGunMesh(wpn), WEAPONS[wpn].pose);
+          r.rp.char.item.rotation.x = Math.PI / 2;
+          r.rp.char.item.position.set(0, -0.6, 0.38);
+        }
+      }
+      boardT -= dt;
+      if (boardT <= 0 && net.humanCount) { boardT = 0.8; refreshBoard(); }
+    }
 
     ui.updatePrompts(dt, camera, player.ctrl.pos, input.keys);
   });

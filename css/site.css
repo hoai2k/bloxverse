@@ -253,6 +253,20 @@ button { font-family: var(--font); cursor: pointer; }
 }
 .bv-modal h2 { font-size: 22px; font-weight: 900; }
 .bv-modal p { color: var(--text-3); font-size: 13px; margin: 8px 0 18px; }
+.bv-userlist { max-height: 220px; overflow-y: auto; margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+.bv-userlist-empty { color: var(--text-3); font-size: 13px; padding: 8px; }
+.bv-user-row { display: flex; gap: 6px; }
+.bv-user-row .pick {
+  flex: 1; height: 40px; border-radius: 9px; border: 1px solid var(--stroke);
+  background: var(--surface-2); color: var(--text); font-size: 14px; font-weight: 700;
+  text-align: left; padding: 0 14px;
+}
+.bv-user-row .pick:hover { background: var(--surface-3); border-color: var(--text-3); }
+.bv-user-row .del {
+  width: 40px; height: 40px; border-radius: 9px; border: 1px solid var(--stroke);
+  background: var(--surface-2); font-size: 14px;
+}
+.bv-user-row .del:hover { background: #4a2326; border-color: var(--red); }
 .bv-modal input {
   width: 100%; height: 44px; border-radius: 9px; border: 1px solid var(--stroke);
   background: var(--bg); color: var(--text); padding: 0 14px; font-size: 15px; outline: none;

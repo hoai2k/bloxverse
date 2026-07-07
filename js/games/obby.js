@@ -10,6 +10,7 @@ import { CharController } from '../engine/physics.js';
 import { pickBots, BotBase, ChatterManager } from '../engine/bots.js';
 import { sfx } from '../engine/sfx.js';
 import { addBlux, getUser, saveUser } from '../site/common.js';
+import { createGameNet } from '../engine/netplay.js';
 import * as W from '../engine/world.js';
 
 const BEST_KEY = 'bloxverse_obby_best_v1';
@@ -235,11 +236,54 @@ export default async function launch({ root, user, game }) {
     return b;
   });
 
+  // ================= MULTIPLAYER =================
+  // Remote racers appear on the tower with live stage progress; the summit
+  // win is announced to everyone and the race resets together. AI racers
+  // bench while friends are here (each client simulates its own bots).
+  let net = null;
+  function setBotsBenched(on) {
+    for (const r of racers) {
+      if (!!r.benched === on) continue;
+      r.benched = on;
+      r.char.group.visible = !on;
+      if (on) ui.removeBoardRow(r.name);
+      else {
+        r.stage = 1; r.wpIndex = 0; r.won = false; r.deadT = 0;
+        r.ctrl.teleport(checkpointPos[1].x + rand(-3, 3), checkpointPos[1].y + 1, checkpointPos[1].z + rand(-3, 3));
+      }
+    }
+    ui.system(on ? 'Real racers are here — the bots stepped aside!' : 'All alone again... the bots are back.');
+    refreshBoard();
+  }
+  createGameNet({
+    scene, ui, gameId: 'obby', user,
+    localState: () => ({
+      x: ctrl.pos.x, y: ctrl.pos.y, z: ctrl.pos.z,
+      ry: playerChar.group.rotation.y,
+      sp: Math.hypot(ctrl.vel.x, ctrl.vel.z), gr: ctrl.grounded, vy: ctrl.vel.y,
+      hp: 100, stats: { stage: me.stage },
+    }),
+    onPeersChanged: (count) => setBotsBenched(count > 0),
+    topics: {
+      summit: (d) => {
+        if (resetT != null || !d?.name) return;
+        const rp = net && [...net.remotes.values()].find((r) => r.name === d.name);
+        win(d.name, false, rp?.char);
+      },
+    },
+  }).then((gn) => {
+    net = gn;
+    if (net.online) ui.system('🌐 Online — race your friends to the top!');
+  });
+
   // ================= HUD =================
   ui.setBoard(['Stage']);
   const refreshBoard = () => {
     ui.board(user.name, [me.stage], { isPlayer: true, color: '#fff' });
-    racers.forEach((r) => ui.board(r.name, [r.stage]));
+    racers.forEach((r) => { if (!r.benched) ui.board(r.name, [r.stage]); });
+    if (net) for (const rp of net.remotes.values()) {
+      ui.board(rp.name, [rp.stats.stage || 1], { color: '#8fd3ff' });
+    }
   };
   refreshBoard();
   ui.setHealth(100, 100);
@@ -255,8 +299,9 @@ export default async function launch({ root, user, game }) {
     ]);
   }
   updatePills();
-  app.onChatSend((t) => chatter.onPlayerMessage(t));
+  app.onChatSend((t) => { chatter.onPlayerMessage(t); net?.sendChat(t); });
   app.onRespawnRequest(() => respawnPlayer());
+  let boardT = 0;
 
   setTimeout(() => {
     racers.slice(0, 3).forEach((r, i) => chatter.botSay(r.chat, 'spawn', {}, 0.8, 0.5 + i * 1.5));
@@ -272,6 +317,7 @@ export default async function launch({ root, user, game }) {
   // ================= win / reset =================
   let resetT = null;
   function win(name, isPlayer, char) {
+    if (isPlayer) net?.sendTopic('summit', { name: user.name });
     ui.announce(`${name} WINS! 👑`, isPlayer ? '+200 Blux! New race starting soon...' : 'New race starting soon...', 5);
     sfx.play('win');
     // fireworks at the summit
@@ -371,6 +417,7 @@ export default async function launch({ root, user, game }) {
 
     // ---- racers ----
     for (const r of racers) {
+      if (r.benched) continue;
       if (r.deadT > 0) {
         r.deadT -= dt;
         if (r.deadT <= 0) {
@@ -422,6 +469,13 @@ export default async function launch({ root, user, game }) {
         continue;
       }
       r.syncVisual(dt);
+    }
+
+    // multiplayer: interpolate remote racers + publish our progress
+    if (net) {
+      net.tick(dt);
+      boardT -= dt;
+      if (boardT <= 0 && net.humanCount) { boardT = 0.8; refreshBoard(); }
     }
 
     ui.updatePrompts(dt, camera, ctrl.pos, input.keys);

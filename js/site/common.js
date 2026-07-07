@@ -2,6 +2,7 @@
 // BLOXVERSE — shared site shell: user account, header, storage
 // ============================================================
 import { GAMES, fmtCount, livePlaying } from './catalog.js';
+import { listProfiles, getProfile, createProfile, deleteProfile, pushProfile } from '../engine/net.js';
 
 const LS_KEY = 'bloxverse_user_v1';
 
@@ -32,6 +33,7 @@ export function getUser() {
 
 export function saveUser(u) {
   localStorage.setItem(LS_KEY, JSON.stringify(u));
+  pushProfile(u); // best-effort cloud sync (avatar + blux follow you)
 }
 
 export function ensureUser() {
@@ -40,38 +42,97 @@ export function ensureUser() {
   return showSignup();
 }
 
-function showSignup() {
+// Sign out on this device (account itself is kept unless deleted)
+export function signOut() {
+  localStorage.removeItem(LS_KEY);
+  location.href = 'index.html';
+}
+
+function freshUser(name, profile) {
+  return {
+    name,
+    blux: profile?.blux ?? 250,
+    avatar: { ...DEFAULT_AVATAR, ...(profile?.avatar || {}) },
+    owned: ['none'], votes: {}, favs: [], recent: [],
+    joined: new Date().toISOString(),
+  };
+}
+
+// ---------------- sign-in modal ----------------
+// Online: dropdown of existing usernames (from InstantDB) + create + delete.
+// Offline: cached names + local-only creation — everything still works.
+export function showSignup() {
   return new Promise((resolve) => {
     const back = document.createElement('div');
     back.className = 'bv-modal-back';
     back.innerHTML = `
       <div class="bv-modal">
         <div class="tilt-big">B</div>
-        <h2>Join Bloxverse</h2>
-        <p>Pick a username to start playing. Everything saves on this device.</p>
-        <input id="bv-uname" maxlength="20" placeholder="Username" autocomplete="off" />
+        <h2>Who's playing?</h2>
+        <p id="bv-sub">Loading players…</p>
+        <div class="bv-userlist" id="bv-userlist"></div>
+        <input id="bv-uname" maxlength="20" placeholder="…or create a new username" autocomplete="off" />
         <div class="err" id="bv-uerr"></div>
-        <button id="bv-ugo">Let's Go!</button>
+        <button id="bv-ugo">Create &amp; Play</button>
       </div>`;
     document.body.appendChild(back);
+    const listEl = back.querySelector('#bv-userlist');
+    const sub = back.querySelector('#bv-sub');
     const input = back.querySelector('#bv-uname');
     const err = back.querySelector('#bv-uerr');
-    const go = () => {
+    let online = false;
+
+    const finish = (u) => { saveUser(u); back.remove(); resolve(u); };
+
+    const signInAs = async (name) => {
+      sub.textContent = `Signing in as ${name}…`;
+      const profile = online ? await getProfile(name) : null;
+      finish(freshUser(name, profile));
+    };
+
+    const renderList = (names) => {
+      listEl.innerHTML = '';
+      if (!names.length) {
+        listEl.innerHTML = `<div class="bv-userlist-empty">No players yet — be the first!</div>`;
+        return;
+      }
+      for (const name of names) {
+        const row = document.createElement('div');
+        row.className = 'bv-user-row';
+        row.innerHTML = `<button class="pick">👤 ${escapeHtml(name)}</button><button class="del" title="Delete this account">🗑</button>`;
+        row.querySelector('.pick').addEventListener('click', () => signInAs(name));
+        row.querySelector('.del').addEventListener('click', async () => {
+          if (!confirm(`Delete the account "${name}"? This can't be undone.`)) return;
+          if (online) await deleteProfile(name);
+          row.remove();
+          toast(`Deleted ${name}`);
+        });
+        listEl.appendChild(row);
+      }
+    };
+
+    (async () => {
+      const res = await listProfiles();
+      online = res.online;
+      sub.textContent = online
+        ? 'Pick your username, or create a new one. Playing online with friends!'
+        : 'Offline right now — pick a cached name or create a local one.';
+      renderList(res.profiles.map((p) => p.name).filter(Boolean));
+    })();
+
+    const go = async () => {
       const name = input.value.trim();
       if (name.length < 3) { err.textContent = 'Username must be at least 3 characters.'; return; }
       if (!/^[\w]+$/.test(name)) { err.textContent = 'Letters, numbers and _ only.'; return; }
-      const u = {
-        name, blux: 250, avatar: { ...DEFAULT_AVATAR },
-        owned: ['none'], votes: {}, favs: [], recent: [],
-        joined: new Date().toISOString(),
-      };
-      saveUser(u);
-      back.remove();
-      resolve(u);
+      err.textContent = '';
+      if (online) {
+        const res = await createProfile(name, { avatar: { ...DEFAULT_AVATAR }, blux: 250 });
+        if (res.taken) { err.textContent = 'That name is taken — pick it from the list to sign in.'; return; }
+      }
+      finish(freshUser(name, null));
     };
     back.querySelector('#bv-ugo').addEventListener('click', go);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-    setTimeout(() => input.focus(), 50);
   });
 }
 

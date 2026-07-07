@@ -11,6 +11,7 @@ import { pickBots, BotBase, ChatterManager } from '../engine/bots.js';
 import { WEAPONS, buildGunMesh, hitscan, spreadDir, spawnMuzzleFlash, GunState } from '../engine/guns.js';
 import { sfx } from '../engine/sfx.js';
 import { addBlux } from '../site/common.js';
+import { createGameNet } from '../engine/netplay.js';
 import * as W from '../engine/world.js';
 
 const ZTYPES = {
@@ -32,6 +33,12 @@ export default async function launch({ root, user, game }) {
   app.setCameraMode('shooter');
   app.camTargetY = 4.6;
   app.sun.color.set(0x9db4ff); // moonlight
+
+  // multiplayer state (wired up in the MULTIPLAYER section below)
+  let net = null;
+  let zseq = 1, lastHostWave = 0;
+  const proxies = new Map();       // zombie id -> rendered proxy (non-host)
+  const remoteHumans = [];         // wrappers for host zombie-targeting
 
   // ================= MAP: Blockton Square at night =================
   W.ground(scene, world, 260, W.asphaltTexture(22));
@@ -158,7 +165,7 @@ export default async function launch({ root, user, game }) {
     const ctrl = new CharController({ speed: T.speed * speedMult(), halfW: 0.9 * T.scale, height: 5 * T.scale });
     ctrl.teleport(gate.x + (Math.random() - 0.5) * 10, 0.5, gate.z + (Math.random() - 0.5) * 10);
     const z = {
-      id: 'z' + nextId++, char, ctrl, type: T, typeId,
+      id: 'z' + nextId++, nid: zseq++, char, ctrl, type: T, typeId,
       hp: T.hp * (1 + wave * 0.06), maxHp: T.hp, alive: true,
       attackT: 0, groanT: Math.random() * 6, target: null, retargetT: 0,
     };
@@ -191,6 +198,7 @@ export default async function launch({ root, user, game }) {
 
   function waveSpawner(dt) {
     if (gameOver) return;
+    if (net && !net.isHost) return; // the host runs the horde
     if (toSpawn > 0) {
       spawnT -= dt;
       if (spawnT <= 0 && zombies.filter((z) => z.alive).length < 22) {
@@ -220,14 +228,23 @@ export default async function launch({ root, user, game }) {
     if (h.isPlayer) updatePills();
   }
   function updatePills() {
+    // non-host: the horde count comes from the host's snapshot
+    const left = (net && !net.isHost)
+      ? (hostRp()?.extra?.lf ?? proxies.size)
+      : zombies.filter((z) => z.alive).length + toSpawn;
     ui.setPills([
       { icon: '💰', value: player.points, label: 'pts' },
       { icon: '🌊', value: `Wave ${Math.max(1, wave)}` },
-      { icon: '🧟', value: zombies.filter((z) => z.alive).length + toSpawn, label: 'left' },
+      { icon: '🧟', value: left, label: 'left' },
     ]);
   }
   ui.setBoard(['Kills']);
-  const refreshBoard = () => humans.forEach((h) => ui.board(h.name, [h.kills], { isPlayer: h.isPlayer, color: '#8fd3ff' }));
+  const refreshBoard = () => {
+    humans.forEach((h) => { if (!h.benched) ui.board(h.name, [h.kills], { isPlayer: h.isPlayer, color: '#8fd3ff' }); });
+    if (net) for (const rp of net.remotes.values()) {
+      ui.board(rp.name, [rp.stats.kills || 0], { color: '#7ddf8a' });
+    }
+  };
   refreshBoard();
   ui.setHealth(100, 100);
   ui.system('Survive the horde! Earn points per hit, spend them at the glowing wall-buys.');
@@ -291,7 +308,13 @@ export default async function launch({ root, user, game }) {
 
   // ================= combat =================
   function chestPos(o) { return new THREE.Vector3(o.ctrl.pos.x, o.ctrl.pos.y + 3.6 * (o.type?.scale || 1), o.ctrl.pos.z); }
-  const zTargets = () => zombies.filter((z) => z.alive).map((z) => ({ id: z.id, ctrl: z.ctrl, alive: z.alive, ref: z }));
+  const zTargets = () => {
+    if (net && !net.isHost) {
+      // non-host: shoot the host's rendered horde
+      return [...proxies.values()].map((p) => ({ id: 'zp' + p.id, ctrl: p.ctrl, alive: true, ref: p }));
+    }
+    return zombies.filter((z) => z.alive).map((z) => ({ id: z.id, ctrl: z.ctrl, alive: z.alive, ref: z }));
+  };
 
   function fireWeapon(h, origin, dir) {
     const g = h.gun;
@@ -309,6 +332,17 @@ export default async function launch({ root, user, game }) {
   }
 
   function hurtZombie(h, z, dmg, headshot, point) {
+    // proxy zombie (we're not the host): take hit points locally, tell host
+    if (z.proxy) {
+      addPoints(h, 10);
+      sfx.play('zombiehit', { volume: 0.35 });
+      if (h.isPlayer) {
+        ui.hitmarker(headshot);
+        ui.popup(camera, point || chestPos(z), `-${Math.round(dmg)}`, headshot ? '#ff5b5b' : '#b8e994', headshot ? 16 : 13);
+      }
+      net?.sendTopic('zhit', { id: z.id, dmg: Math.round(dmg * 10) / 10, head: !!headshot });
+      return;
+    }
     if (!z.alive) return;
     z.hp -= dmg;
     addPoints(h, 10);
@@ -323,6 +357,8 @@ export default async function launch({ root, user, game }) {
       addPoints(h, z.type.pts + (headshot ? 30 : 0));
       z.char.breakApart(scene, 0);
       sfx.play('oof', { volume: 0.5 });
+      // let everyone else play the death (no bounty for us in the payload)
+      net?.sendTopic('zdeath', { id: z.nid, by: null, pts: 0 });
       refreshBoard();
       updatePills();
       if (h.chat && Math.random() < 0.06) chatter.botSay(h.chat, 'kill', { victim: 'that zombie' }, 0.8, 0.3);
@@ -349,14 +385,23 @@ export default async function launch({ root, user, game }) {
     if (h.chat) chatter.botSay(h.chat, 'downed', {}, 0.85, 0.6);
     humans.filter((o) => o.chat && o !== h && o.alive).slice(0, 1).forEach((o) =>
       chatter.botSay(o.chat, 'teammateDown', { name: h.name }, 0.5, 1.5));
-    if (!humans.some((x) => x.alive)) endGame();
+    const localAlive = humans.some((x) => !x.benched && x.alive);
+    const remotesAlive = net ? remoteHumans.some((r) => r.alive) : false;
+    if (!localAlive && !remotesAlive) {
+      if (!net || net.isHost || net.humanCount === 0) {
+        net?.sendTopic('zwipe', { wave });
+        endGame();
+      }
+    }
   }
 
-  function endGame() {
+  function endGame(waveReached) {
+    if (gameOver) return;
     gameOver = true;
-    const reward = wave * 10;
+    const w = waveReached || wave;
+    const reward = w * 10;
     addBlux(reward);
-    ui.announce('SQUAD WIPED', `You survived ${wave} waves! +${reward} Blux — restarting...`, 6);
+    ui.announce('SQUAD WIPED', `You survived ${w} waves! +${reward} Blux — restarting...`, 6);
     sfx.play('lose');
     setTimeout(() => location.reload(), 6500);
   }
@@ -374,9 +419,15 @@ export default async function launch({ root, user, game }) {
       z.retargetT = 1.5 + Math.random();
       let best = null, bd = Infinity;
       for (const h of humans) {
-        if (!h.alive) continue;
+        if (h.benched || !h.alive) continue;
         const d = distXZ(z.ctrl.pos, h.ctrl.pos);
         if (d < bd) { bd = d; best = h; }
+      }
+      // the host's zombies also hunt remote survivors
+      for (const r of remoteHumans) {
+        if (!r.alive) continue;
+        const d = distXZ(z.ctrl.pos, r.ctrl.pos);
+        if (d < bd) { bd = d; best = r; }
       }
       z.target = best;
     }
@@ -401,7 +452,9 @@ export default async function launch({ root, user, game }) {
         z.attackT = 1.15;
         z.char.playAction(Math.random() < 0.5 ? 'punchR' : 'punchL', 0.35);
         setTimeout(() => {
-          if (z.alive && tgt.alive && distXZ(z.ctrl.pos, tgt.ctrl.pos) < 4.4) hurtHuman(z, tgt, z.type.dmg);
+          if (!z.alive || !tgt.alive || distXZ(z.ctrl.pos, tgt.ctrl.pos) >= 4.4) return;
+          if (tgt.remote) net?.sendTopic('zatk', { to: tgt.peerId, dmg: z.type.dmg });
+          else hurtHuman(z, tgt, z.type.dmg);
         }, 180);
       }
     }
@@ -473,6 +526,154 @@ export default async function launch({ root, user, game }) {
     }
   }
 
+  // ================= MULTIPLAYER (co-op horde) =================
+  // The longest-connected player is HOST: they simulate the horde and
+  // publish a compact snapshot in their presence. Everyone else renders
+  // interpolated zombie proxies and sends hit events; the host applies
+  // damage and announces kills. If the host leaves, the next player
+  // adopts the horde from the last snapshot. Squad bots bench while
+  // friends are here.
+  const ZTYPE_IDS = ['walker', 'runner', 'brute'];
+
+  function hostRp() {
+    if (!net || net.isHost) return null;
+    let best = null;
+    for (const rp of net.remotes.values()) {
+      if (!best || rp.peerId < best.peerId) best = rp;
+    }
+    return best;
+  }
+  function setBotsBenched(on) {
+    for (const h of humans) {
+      if (!h.bot || !!h.benched === on) continue;
+      h.benched = on;
+      h.char.group.visible = !on;
+      if (on) { h.alive = false; ui.removeBoardRow(h.name); }
+      else { h.alive = true; h.downed = false; h.hp = 100; h.char.respawnVisual(); }
+    }
+    ui.system(on ? 'Real survivors are here — the bot squad stepped aside!' : 'All alone again... the bot squad is back.');
+    refreshBoard();
+  }
+  function hordeSnapshot() {
+    const zs = [];
+    for (const z of zombies) {
+      if (!z.alive) continue;
+      zs.push([z.nid, ZTYPE_IDS.indexOf(z.typeId), Math.round(z.ctrl.pos.x * 10) / 10,
+        Math.round(z.ctrl.pos.z * 10) / 10, Math.round(z.char.group.rotation.y * 100) / 100,
+        Math.round((z.hp / (z.type.hp * (1 + wave * 0.06))) * 100)]);
+    }
+    return { zs, wv: wave, lf: zombies.filter((x) => x.alive).length + toSpawn };
+  }
+  function syncProxies(ex) {
+    if (!ex || !ex.zs) return;
+    const seen = new Set();
+    for (const [id, ti, x, z, ry] of ex.zs) {
+      seen.add(id);
+      let p = proxies.get(id);
+      if (!p) {
+        const T = ZTYPES[ZTYPE_IDS[ti]] || ZTYPES.walker;
+        const char = new R15Character({
+          name: 'zombie', nameTag: false,
+          avatar: { skin: T.skin, shirt: T.shirt, pants: '#3d3d33', face: 'zombie', hat: 'none' },
+        });
+        char.holdPose = 'zombie';
+        char.group.scale.setScalar(T.scale);
+        char.group.position.set(x, 0.5, z);
+        scene.add(char.group);
+        p = { proxy: true, id, char, type: T, ctrl: { pos: new THREE.Vector3(x, 0.5, z) }, tx: x, tz: z, ry, alive: true };
+        proxies.set(id, p);
+      }
+      p.tx = x; p.tz = z; p.ry = ry;
+    }
+    // remove proxies the host no longer reports (death visuals come via zdeath)
+    for (const [id, p] of proxies) {
+      if (!seen.has(id)) { p.char.dispose(); proxies.delete(id); }
+    }
+    // wave changes announced by host state
+    if (ex.wv && ex.wv !== lastHostWave) {
+      lastHostWave = ex.wv;
+      wave = ex.wv;
+      sfx.play('wave');
+      ui.announce(`WAVE ${ex.wv}`, 'Hold the line together!', 2.4);
+      if (player.downed) { // revived at wave start, same as solo
+        player.downed = false; player.alive = true; player.hp = 100;
+        player.char.respawnVisual(); player.char.setHealth(100);
+        ui.respawnScreen(false); ui.setHealth(100, 100);
+      }
+    }
+    updatePills();
+  }
+  function adoptHorde() {
+    // previous host left — resurrect the horde from the last proxy snapshot
+    for (const [, p] of proxies) {
+      const typeId = ZTYPE_IDS[Math.max(0, ZTYPE_IDS.findIndex((t) => ZTYPES[t] === p.type))] || 'walker';
+      const z = spawnZombie(typeId);
+      z.ctrl.teleport(p.ctrl.pos.x, 0.5, p.ctrl.pos.z);
+      p.char.dispose();
+    }
+    proxies.clear();
+    if (lastHostWave > wave) wave = lastHostWave;
+    ui.system('You are now hosting the horde!');
+  }
+  createGameNet({
+    scene, ui, gameId: 'zombies', user,
+    localState: () => ({
+      x: player.ctrl.pos.x, y: player.ctrl.pos.y, z: player.ctrl.pos.z,
+      ry: player.char.group.rotation.y,
+      sp: Math.hypot(player.ctrl.vel.x, player.ctrl.vel.z), gr: player.ctrl.grounded, vy: player.ctrl.vel.y,
+      hp: Math.max(player.downed ? 0 : 1, Math.round(player.hp)), mhp: 100,
+      stats: { kills: player.kills, down: player.downed },
+      pose: player.char.holdPose,
+    }),
+    onHit: () => { },
+    onPeersChanged: (count, isHost) => {
+      remoteHumans.length = 0;
+      for (const [pid, rp] of net.remotes) {
+        remoteHumans.push({ remote: true, peerId: pid, name: rp.name, rp, ctrl: rp.ctrl, get alive() { return rp.alive && !rp.stats.down; } });
+      }
+      setBotsBenched(count > 0);
+      if (isHost && proxies.size) adoptHorde();
+    },
+    topics: {
+      zhit: (d) => { // host applies remote players' hits to the real horde
+        if (!net?.isHost || !d) return;
+        const z = zombies.find((x) => x.nid === d.id && x.alive);
+        if (!z) return;
+        z.hp -= d.dmg || 0;
+        z.lastHitBy = d._from;
+        if (z.hp <= 0) killZombieAuthoritative(z, d._from);
+      },
+      zdeath: (d) => { // everyone plays the death; the killer takes the bounty
+        if (!d) return;
+        const p = proxies.get(d.id);
+        if (p) { p.char.breakApart(scene, 0); proxies.delete(p.id); sfx.play('oof', { volume: 0.5 }); }
+        if (d.by === net?.room?.peerId) {
+          player.kills++;
+          addPoints(player, d.pts || 60);
+          refreshBoard();
+        }
+      },
+      zatk: (d) => { // a host zombie bit ME
+        if (!d || d.to !== net?.room?.peerId || !player.alive) return;
+        hurtHuman(null, player, d.dmg || 12);
+      },
+      zwipe: (d) => { if (!gameOver) endGame(d?.wave); },
+    },
+  }).then((gn) => {
+    net = gn;
+    if (net.online) ui.system('🌐 Online — survive the horde together!');
+    const origPlay = player.char.playAction.bind(player.char);
+    player.char.playAction = (name, dur) => { net.action(name, dur); origPlay(name, dur); };
+  });
+  // host-side: a zombie died (by anyone) — announce with kill credit
+  function killZombieAuthoritative(z, byPeer) {
+    z.alive = false;
+    z.char.breakApart(scene, 0);
+    sfx.play('oof', { volume: 0.5 });
+    net?.sendTopic('zdeath', { id: z.nid, by: byPeer, pts: z.type.pts });
+    updatePills();
+  }
+
   // ================= player bindings =================
   function playerFire() {
     if (ui.menuOpen || !player.alive || gameOver) return;
@@ -499,7 +700,8 @@ export default async function launch({ root, user, game }) {
   }
   refreshWeaponUI();
   updatePills();
-  app.onChatSend((t) => chatter.onPlayerMessage(t));
+  app.onChatSend((t) => { chatter.onPlayerMessage(t); net?.sendChat(t); });
+  let boardT = 0;
 
   setTimeout(() => {
     humans.filter((h) => h.chat).forEach((h, i) => chatter.botSay(h.chat, 'spawn', {}, 0.7, 0.5 + i * 1.4));
@@ -529,6 +731,7 @@ export default async function launch({ root, user, game }) {
     } else player.ctrl.moveDir.set(0, 0, 0);
 
     for (const h of humans) {
+      if (h.benched) continue;
       if (h.bot && h.alive) botThink(h, dt);
       if (h.bot && h.gun) h.gun.update(dt);
       if (!h.downed) {
@@ -563,6 +766,34 @@ export default async function launch({ root, user, game }) {
       player.ctrl.pos.x + Math.cos(yaw) * 1.6,
       player.ctrl.pos.y,
       player.ctrl.pos.z - Math.sin(yaw) * 1.6);
+
+    // ---- multiplayer ----
+    if (net) {
+      if (net.isHost) {
+        // publish the authoritative horde snapshot with our presence
+        if (net.humanCount) net.setExtra(hordeSnapshot());
+      } else {
+        // render the host's horde as interpolated proxies
+        const host = hostRp();
+        if (host) syncProxies(host.extra);
+        for (const p of proxies.values()) {
+          const px = p.ctrl.pos.x, pz = p.ctrl.pos.z;
+          p.ctrl.pos.x += (p.tx - px) * Math.min(1, dt * 8);
+          p.ctrl.pos.z += (p.tz - pz) * Math.min(1, dt * 8);
+          p.char.group.position.set(p.ctrl.pos.x, 0.5, p.ctrl.pos.z);
+          p.char.group.rotation.y = p.ry;
+          const sp = Math.hypot(p.ctrl.pos.x - px, p.ctrl.pos.z - pz) / Math.max(dt, 0.001);
+          p.char.update(dt, { speed: Math.min(sp, 16), grounded: true, velY: 0 });
+        }
+      }
+      net.tick(dt);
+      boardT -= dt;
+      if (boardT <= 0 && net.humanCount) {
+        boardT = 0.8;
+        refreshBoard();
+        if (!net.isHost) updatePills();
+      }
+    }
 
     ui.updatePrompts(dt, camera, player.ctrl.pos, input.keys);
   });
