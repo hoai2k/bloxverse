@@ -42,6 +42,7 @@ export default async function launch({ root, user, game }) {
   const movers = [];            // {mesh, col, a, b, speed, phase}
   const blinkers = [];          // {mesh, col, offset}
   const spinners = [];          // {bar, speed}
+  const swingers = [];          // {mesh, col, cx, cy, cz, perpX, perpZ, amp, speed, phase}
   let checkpointPos = [];       // stage -> Vector3
 
   const stageLabel = (n, pos) => {
@@ -73,11 +74,162 @@ export default async function launch({ root, user, game }) {
     return { mesh, col };
   }
 
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  // ---- per-stage build context (travel-relative helpers) ----
+  // B.plat(fw, side, up, along, across) lays a path platform: it moves the
+  // cursor `fw` forward + `side` sideways + `up`, sizes the box so `along`
+  // runs along the direction of travel and `across` runs perpendicular (so
+  // beams/stones read the same whichever way the tower is spiralling), and
+  // registers a waypoint for the AI racers. B.hazard() places a non-path
+  // obstacle without moving the cursor.
+  function makeCtx(cx, cy, cz, dx, dz, diff, color, s) {
+    return {
+      px: cx, py: cy, pz: cz, dx, dz, perpX: dz, perpZ: dx, diff, color, s,
+      plat(fw, side, up, along, across, o = {}) {
+        this.px += this.dx * fw + this.perpX * side;
+        this.pz += this.dz * fw + this.perpZ * side;
+        this.py += up;
+        const w = this.dx !== 0 ? along : across;
+        const d = this.dz !== 0 ? along : across;
+        const r = platform(this.px, this.py, this.pz, w, d, o.color || this.color, o);
+        if (o.wp !== false) waypoints.push({ pos: new THREE.Vector3(this.px, this.py, this.pz), stage: this.s, mover: o.mover });
+        return { x: this.px, y: this.py, z: this.pz, col: r.col };
+      },
+      hazard(fwOff, side, yOff, along, across, o = {}) {
+        const x = this.px + this.dx * fwOff + this.perpX * side;
+        const z = this.pz + this.dz * fwOff + this.perpZ * side;
+        const w = this.dx !== 0 ? along : across;
+        const d = this.dz !== 0 ? along : across;
+        return platform(x, this.py + (yOff || 0), z, w, d, o.color || this.color, o);
+      },
+    };
+  }
+
+  function addSwinger(pivotX, pivotY, pivotZ, perpX, perpZ, radius, speed, phase) {
+    // small fixed anchor at the pivot
+    const anchor = new THREE.Mesh(new THREE.BoxGeometry(1, 0.6, 1), W.mat('#5a5f66'));
+    anchor.position.set(pivotX, pivotY, pivotZ);
+    scene.add(anchor);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 10),
+      new THREE.MeshLambertMaterial({ color: '#e03131', emissive: '#a61e1e', emissiveIntensity: 0.55 }));
+    scene.add(ball);
+    // invisible kill trigger tracks the ball
+    const trigger = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.5, 2.5), new THREE.MeshBasicMaterial({ visible: false }));
+    scene.add(trigger);
+    const col = world.addCollider(trigger, { solid: false, touch: 'kill' });
+    swingers.push({ ball, trigger, col, pivotX, pivotY, pivotZ, perpX, perpZ, radius, speed, phase });
+  }
+
+  // ---- the obstacle library ----
+  const KINDS = [
+    { min: 1, build: (B) => { // classic jumps
+      const n = 3 + Math.floor(B.diff * 3);
+      for (let i = 0; i < n; i++) B.plat(rand(7.5, 9.5), rand(-1, 1) * B.diff * 1.5, rand(0.5, 2.2), rand(4, 5.5), rand(4, 5.5));
+    } },
+    { min: 1, build: (B) => { // ascending staircase then a landing
+      const n = 5 + Math.floor(B.diff * 3);
+      for (let i = 0; i < n; i++) B.plat(4.6, 0, 1.25, 5, 5);
+      B.plat(8.5, 0, -1.4, 6, 6);
+    } },
+    { min: 1, build: (B) => { // zigzag hops
+      const A = 4.3; let lat = 0;
+      for (let i = 0; i < 6; i++) { const t = (i % 2 ? A : -A); B.plat(5.6, t - lat, rand(0.3, 1.3), 4, 4); lat = t; }
+      B.plat(7, -lat, 0.8, 5, 5);
+    } },
+    { min: 2, build: (B) => { // tightrope beams
+      const segs = 3;
+      for (let i = 0; i < segs; i++) { const L = 9 + B.diff * 2; B.plat(L, 0, rand(-0.2, 0.6), L + 1.5, 1.9); }
+      B.plat(7, 0, 0.5, 5, 5);
+    } },
+    { min: 3, build: (B) => { // stepping stones (big gaps + side jitter)
+      const n = 5 + Math.floor(B.diff * 2);
+      for (let i = 0; i < n; i++) B.plat(rand(8, 10.5), rand(-2.6, 2.6), rand(-0.4, 1.2), rand(3, 3.8), rand(3, 3.8));
+      B.plat(8, 0, 0.5, 5, 5);
+    } },
+    { min: 4, build: (B) => { // kill-brick alley
+      for (let i = 0; i < 4; i++) {
+        B.plat(8, 0, 1, 4.6, 4.6);
+        B.hazard(0, 5, 0, 4.6, 4.6, { kill: true });
+        if (Math.random() < B.diff) B.hazard(0, -5, 0, 4.6, 4.6, { kill: true });
+      }
+      B.plat(8, 0, 1, 5, 5);
+    } },
+    { min: 5, build: (B) => { // moving platforms over a gap
+      const gap = 28;
+      for (let i = 0; i < 2; i++) {
+        const cxp = B.px + B.dx * gap * (0.34 + i * 0.34);
+        const czp = B.pz + B.dz * gap * (0.34 + i * 0.34);
+        const cyp = B.py + 1 + i;
+        const { mesh, col } = W.part(scene, world, { x: cxp, y: cyp - 0.5, z: czp, w: 6, h: 1, d: 6, color: '#dee2e6' });
+        const amp = 6 + B.diff * 4;
+        movers.push({ mesh, col,
+          a: new THREE.Vector3(cxp - B.perpX * amp, cyp - 0.5, czp - B.perpZ * amp),
+          b: new THREE.Vector3(cxp + B.perpX * amp, cyp - 0.5, czp + B.perpZ * amp),
+          speed: 0.5 + B.diff * 0.5, phase: i * 1.7 });
+        waypoints.push({ pos: new THREE.Vector3(cxp, cyp, czp), stage: B.s, mover: movers[movers.length - 1] });
+      }
+      B.px += B.dx * gap; B.pz += B.dz * gap; B.py += 3;
+      B.plat(0, 0, 0, 7, 7);
+    } },
+    { min: 6, build: (B) => { // conveyor belts pushing you backward
+      for (let i = 0; i < 3; i++) {
+        const r = B.plat(9, 0, rand(0.3, 1), 9, 7, { color: '#5c7cfa' });
+        if (r.col) r.col.carry = new THREE.Vector3(-B.dx * (4 + B.diff * 4), 0, -B.dz * (4 + B.diff * 4));
+      }
+      B.plat(8, 0, 0.6, 5, 5);
+    } },
+    { min: 7, build: (B) => { // swinging wrecking balls over a walkway
+      const L = 20 + B.diff * 6;
+      const sx0 = B.px + B.dx * 2, sz0 = B.pz + B.dz * 2;
+      B.plat(L, 0, 0.5, L + 3, 5);
+      const nb = 3;
+      for (let k = 0; k < nb; k++) {
+        const f = (k + 1) / (nb + 1);
+        addSwinger(sx0 + B.dx * L * f, B.py + 6.8, sz0 + B.dz * L * f, B.perpX, B.perpZ, 4.8, 1.2 + B.diff * 0.7, k * 1.2);
+      }
+      B.plat(7, 0, 0.5, 5, 5);
+    } },
+    { min: 8, build: (B) => { // vanishing tiles
+      for (let i = 0; i < 5; i++) {
+        const r = B.plat(7, 0, 0.8, 4.4, 4.4, { color: '#ffe066' });
+        if (r.col) blinkers.push({ col: r.col, mesh: r.col.mesh, offset: i * 0.62 });
+      }
+      B.plat(7, 0, 0.6, 5, 5);
+    } },
+    { min: 10, build: (B) => { // shrinking gauntlet
+      for (let i = 0; i < 6; i++) {
+        const sz = Math.max(2.2, 5 - i * 0.5);
+        B.plat(rand(7, 8.5), rand(-1.6, 1.6), rand(0.3, 1), sz, sz);
+      }
+      B.plat(8, 0, 0.6, 5, 5);
+    } },
+    { min: 12, build: (B) => { // spinner
+      const at = B.plat(11, 0, 1.5, 16, 16);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(15, 1.6, 1.6),
+        new THREE.MeshLambertMaterial({ color: '#e03131', emissive: '#a61e1e', emissiveIntensity: 0.6 }));
+      bar.position.set(at.x, at.y + 1.3, at.z);
+      scene.add(bar);
+      const col = world.addCollider(bar, { solid: false, touch: 'kill', obb: { half: new THREE.Vector3(7.5, 0.8, 0.8) } });
+      spinners.push({ bar, speed: (0.9 + B.diff * 1.3) * (Math.random() < 0.5 ? 1 : -1), col });
+      B.plat(11, 0, 1.5, 6, 6);
+    } },
+  ];
+
+  // ---- pick a varied order: difficulty-gated, no adjacent repeats ----
+  const order = [];
+  let lastKind = -1;
+  for (let s = 1; s < STAGES; s++) {
+    if (s === 1) { order.push(0); lastKind = 0; continue; }
+    const pool = KINDS.map((k, i) => i).filter((i) => KINDS[i].min <= s && i !== lastKind);
+    const idx = pool[Math.floor(Math.random() * pool.length)];
+    order.push(idx); lastKind = idx;
+  }
+
   // build the spiral
   let cx = 0, cz = 0, cy = 6;
   let dirIdx = 0; // 0:+z 1:+x 2:-z 3:-x
   const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-  const rand = (a, b) => a + Math.random() * (b - a);
 
   for (let s = 1; s <= STAGES; s++) {
     const color = PALETTE[(s - 1) % PALETTE.length];
@@ -96,92 +248,14 @@ export default async function launch({ root, user, game }) {
 
     if (s === STAGES) break; // summit!
 
-    // obstacle section toward the next checkpoint
-    const kind = s === 1 ? 0 : (s - 1) % 5;
-    let px = cx, py = cy, pz = cz;
-    const step = (fw, up, w = 5, d = 5, o = {}) => {
-      px += dx * fw; pz += dz * fw; py += up;
-      platform(px, py, pz, w, d, o.color || color, o);
-      waypoints.push({ pos: new THREE.Vector3(px, py, pz), stage: s });
-      return { x: px, y: py, z: pz };
-    };
-
-    if (kind === 0) {
-      // classic jumps
-      const n = 3 + Math.floor(diff * 3);
-      for (let i = 0; i < n; i++) step(rand(7.5, 9.5), rand(0.5, 2), rand(4, 5.5), rand(4, 5.5));
-    } else if (kind === 1) {
-      // kill brick alley: safe tiles with red tiles beside them
-      for (let i = 0; i < 4; i++) {
-        const at = step(8, 1, 4.6, 4.6);
-        // flanking kill bricks
-        const side = [dz, dx];
-        platform(at.x + side[0] * 5, at.y, at.z + side[1] * 5, 4.6, 4.6, color, { kill: true });
-        if (Math.random() < diff) platform(at.x - side[0] * 5, at.y, at.z - side[1] * 5, 4.6, 4.6, color, { kill: true });
-      }
-      step(8, 1, 5, 5);
-    } else if (kind === 2) {
-      // moving platforms across a big gap
-      const start = { x: px, y: py, z: pz };
-      const gap = 30;
-      const mid1 = { x: px + dx * gap * 0.33, y: py + 1, z: pz + dz * gap * 0.33 };
-      const mid2 = { x: px + dx * gap * 0.66, y: py + 2, z: pz + dz * gap * 0.66 };
-      for (const [i, m] of [mid1, mid2].entries()) {
-        const { mesh, col } = W.part(scene, world, { x: m.x, y: m.y - 0.5, z: m.z, w: 6, h: 1, d: 6, color: '#dee2e6' });
-        // patrol perpendicular to travel dir
-        const amp = 6 + diff * 4;
-        movers.push({
-          mesh, col,
-          a: new THREE.Vector3(m.x - dz * amp, m.y - 0.5, m.z - dx * amp),
-          b: new THREE.Vector3(m.x + dz * amp, m.y - 0.5, m.z + dx * amp),
-          speed: 0.5 + diff * 0.5, phase: i * 1.7,
-        });
-        waypoints.push({ pos: new THREE.Vector3(m.x, m.y, m.z), stage: s, mover: movers[movers.length - 1] });
-      }
-      px += dx * gap; pz += dz * gap; py += 3;
-      platform(px, py, pz, 7, 7, color);
-      waypoints.push({ pos: new THREE.Vector3(px, py, pz), stage: s });
-    } else if (kind === 3) {
-      // spinner platform
-      const at = step(11, 1.5, 16, 16);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(15, 1.6, 1.6),
-        new THREE.MeshLambertMaterial({ color: '#e03131', emissive: '#a61e1e', emissiveIntensity: 0.6 }));
-      bar.position.set(at.x, at.y + 1.3, at.z);
-      scene.add(bar);
-      const col = world.addCollider(bar, { solid: false, touch: 'kill', obb: { half: new THREE.Vector3(7.5, 0.8, 0.8) } });
-      spinners.push({ bar, speed: (0.9 + diff * 1.3) * (Math.random() < 0.5 ? 1 : -1), col });
-      step(11, 1.5, 6, 6);
-    } else {
-      // vanishing tiles
-      for (let i = 0; i < 5; i++) {
-        const at = step(7, 0.8, 4.4, 4.4, { color: '#ffe066' });
-        const rec = { offset: i * 0.65 };
-        const built = platform(at.x, at.y, at.z, 4.4, 4.4, '#ffe066'); // replaced below
-        // ^ platform() already added by step(); remove duplicate
-        scene.remove(built.mesh);
-        world.remove(built.col);
-        // find the just-created mesh/col from step's platform: track via bounding search
-        blinkers.push({ x: at.x, y: at.y, z: at.z, ...rec });
-      }
-    }
+    // build this stage's obstacle section toward the next checkpoint
+    const B = makeCtx(cx, cy, cz, dx, dz, diff, color, s);
+    KINDS[order[s - 1]].build(B);
 
     // hop to next checkpoint location
     const fw = rand(8, 9.5);
-    px += dx * fw; pz += dz * fw; py += 1.5;
-    cx = px; cy = py; cz = pz;
+    cx = B.px + dx * fw; cy = B.py + 1.5; cz = B.pz + dz * fw;
     if (s % 3 === 0) dirIdx = (dirIdx + 1) % 4;
-  }
-
-  // wire blinkers to their real platform colliders (nearest collider to coords)
-  for (const b of blinkers) {
-    let best = null, bd = Infinity;
-    for (const col of world.colliders) {
-      if (!col.mesh) continue;
-      const c = col.box.getCenter(new THREE.Vector3());
-      const d = Math.abs(c.x - b.x) + Math.abs(c.z - b.z) + Math.abs(c.y - (b.y - 0.5));
-      if (d < bd) { bd = d; best = col; }
-    }
-    if (best && bd < 2) { b.col = best; b.mesh = best.mesh; }
   }
 
   // summit decorations
@@ -383,6 +457,16 @@ export default async function launch({ root, user, game }) {
     }
     // ---- spinners ----
     for (const s of spinners) s.bar.rotation.y += s.speed * dt;
+    // ---- swinging wrecking balls (pendulum in the perpendicular plane) ----
+    for (const sw of swingers) {
+      const ang = Math.sin(t * sw.speed + sw.phase) * 0.95;      // swing angle from vertical
+      const bx = sw.pivotX + sw.perpX * Math.sin(ang) * sw.radius;
+      const bz = sw.pivotZ + sw.perpZ * Math.sin(ang) * sw.radius;
+      const by = sw.pivotY - Math.cos(ang) * sw.radius;
+      sw.ball.position.set(bx, by, bz);
+      sw.trigger.position.set(bx, by, bz);
+      world.refresh(sw.col);
+    }
 
     // ---- player ----
     if (!ui.menuOpen) {

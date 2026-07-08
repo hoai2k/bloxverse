@@ -167,7 +167,7 @@ export function pushProfile(user) {
 //   peers                      - latest Map
 //   leave()
 
-const PUBLISH_HZ = 10;
+const PUBLISH_HZ = 15;
 
 class RealRoom {
   constructor(db, roomId) {

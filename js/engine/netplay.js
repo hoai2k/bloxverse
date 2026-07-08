@@ -14,7 +14,8 @@ import * as THREE from 'three';
 import { R15Character, nameColor } from './character.js';
 import { joinGameRoom, nameHash } from './net.js';
 
-const LERP_DELAY = 0.13; // seconds of interpolation buffer
+const LERP_DELAY = 0.1;   // seconds we render behind the newest snapshot
+const MAX_EXTRAP = 0.28;  // keep moving (dead-reckoning) this long through a gap
 
 export class RemotePlayer {
   constructor(scene, presence) {
@@ -75,29 +76,46 @@ export class RemotePlayer {
   }
 
   tick(dt) {
-    // interpolate LERP_DELAY behind the newest snapshot
+    // Render LERP_DELAY behind the newest snapshot. When we run past the
+    // newest sample (a packet was late or dropped), DEAD-RECKON forward using
+    // the last known velocity for up to MAX_EXTRAP instead of freezing — this
+    // is what keeps remote players smooth through network hiccups rather than
+    // stuttering and teleporting.
     const now = performance.now() / 1000 - LERP_DELAY;
     const b = this.buf;
     let target = null;
     if (b.length >= 2) {
-      let i = b.length - 1;
-      while (i > 0 && b[i - 1].t > now) i--;
-      const a = b[Math.max(0, i - 1)], c = b[i];
-      const span = Math.max(0.001, c.t - a.t);
-      const f = Math.max(0, Math.min(1, (now - a.t) / span));
-      target = {
-        x: a.x + (c.x - a.x) * f,
-        y: a.y + (c.y - a.y) * f,
-        z: a.z + (c.z - a.z) * f,
-        ry: lerpAngle(a.ry, c.ry, f),
-      };
+      const newest = b[b.length - 1];
+      if (now >= newest.t) {
+        const a = b[b.length - 2];
+        const span = Math.max(0.001, newest.t - a.t);
+        const over = Math.min(now - newest.t, MAX_EXTRAP);
+        target = {
+          x: newest.x + (newest.x - a.x) / span * over,
+          y: newest.y + (newest.y - a.y) / span * over,
+          z: newest.z + (newest.z - a.z) / span * over,
+          ry: newest.ry,
+        };
+      } else {
+        let i = b.length - 1;
+        while (i > 0 && b[i - 1].t > now) i--;
+        const a = b[Math.max(0, i - 1)], c = b[i];
+        const span = Math.max(0.001, c.t - a.t);
+        const f = Math.max(0, Math.min(1, (now - a.t) / span));
+        target = {
+          x: a.x + (c.x - a.x) * f,
+          y: a.y + (c.y - a.y) * f,
+          z: a.z + (c.z - a.z) * f,
+          ry: lerpAngle(a.ry, c.ry, f),
+        };
+      }
     } else if (b.length === 1) {
       target = b[0];
     }
     if (target) {
       this.ctrl.pos.set(target.x, target.y, target.z);
       this.char.group.position.copy(this.ctrl.pos);
-      this.char.group.rotation.y = lerpAngle(this.char.group.rotation.y, target.ry, Math.min(1, dt * 14));
+      this.char.group.rotation.y = lerpAngle(this.char.group.rotation.y, target.ry, Math.min(1, dt * 16));
     }
     if (this.alive) {
       this.char.update(dt, { speed: this._sp, grounded: this._gr, velY: this._vy });
