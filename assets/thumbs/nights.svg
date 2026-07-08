@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="nsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1026"/><stop offset="0.55" stop-color="#25335e"/><stop offset="1" stop-color="#4a5f7a"/>
+    </linearGradient>
+    <radialGradient id="fire" cx="0.5" cy="0.65" r="0.55">
+      <stop offset="0" stop-color="#fff2b0"/><stop offset="0.4" stop-color="#ffb43c"/><stop offset="0.8" stop-color="#e8602a"/><stop offset="1" stop-color="#7a2a12"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffcf6b" stop-opacity="0.5"/><stop offset="1" stop-color="#ffcf6b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#nsky)"/>
+  <!-- moon + stars -->
+  <circle cx="418" cy="76" r="34" fill="#e8eeff"/>
+  <circle cx="405" cy="68" r="9" fill="#cdd6ea"/>
+  <g fill="#ffffff">
+    <circle cx="60" cy="60" r="2.5"/><circle cx="120" cy="40" r="2"/><circle cx="200" cy="70" r="2.5"/><circle cx="300" cy="50" r="2"/><circle cx="150" cy="100" r="2"/><circle cx="470" cy="140" r="2.5"/><circle cx="90" cy="130" r="2"/>
+  </g>
+  <!-- tree silhouettes (pine) -->
+  <g fill="#14251c">
+    <polygon points="40,300 76,210 112,300"/><polygon points="46,340 76,260 106,340"/>
+    <rect x="70" y="330" width="12" height="40"/>
+    <polygon points="430,320 470,220 512,320"/><polygon points="436,360 470,275 504,360"/>
+    <rect x="464" y="350" width="14" height="46"/>
+    <polygon points="360,300 388,235 416,300"/>
+  </g>
+  <g fill="#1c3327">
+    <polygon points="150,330 190,225 230,330"/><polygon points="156,375 190,285 224,375"/>
+    <rect x="182" y="360" width="14" height="44"/>
+  </g>
+  <!-- ground -->
+  <rect x="0" y="382" width="512" height="130" fill="#20361f"/>
+  <rect x="0" y="376" width="512" height="10" fill="#2c4a2a"/>
+  <!-- campfire glow -->
+  <ellipse cx="256" cy="430" rx="180" ry="90" fill="url(#glow)"/>
+  <!-- logs -->
+  <g stroke="#6a4526" stroke-width="10" stroke-linecap="round">
+    <path d="M218 452 l76 -20"/><path d="M222 436 l72 26"/>
+  </g>
+  <!-- fire -->
+  <path d="M256 360 q34 40 20 74 q-6 16 -22 22 q22 -30 -2 -52 q-8 26 -24 34 q-20 -34 12 -66 q-4 22 10 20 q16 -20 6 -52z" fill="url(#fire)"/>
+  <path d="M256 388 q18 22 10 44 q-4 10 -14 14 q10 -20 -4 -34 q-4 16 -14 20 q-8 -22 12 -40 q-2 12 4 12z" fill="#ffe08a"/>
+  <!-- survivor with axe -->
+  <g transform="translate(120 356)">
+    <rect x="0" y="30" width="34" height="44" rx="7" fill="#7a4a2a"/>
+    <rect x="-14" y="34" width="16" height="14" rx="7" fill="#e0a370"/>
+    <rect x="30" y="8" width="14" height="34" rx="6" fill="#e0a370" transform="rotate(-32 37 25)"/>
+    <rect x="2" y="74" width="14" height="34" rx="6" fill="#3a4a2a"/>
+    <rect x="19" y="74" width="14" height="34" rx="6" fill="#3a4a2a"/>
+    <rect x="0" y="-6" width="34" height="34" rx="9" fill="#e0a370"/>
+    <rect x="6" y="4" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <rect x="20" y="4" width="5" height="9" rx="2.5" fill="#1a1a1a"/>
+    <path d="M7 20 q10 5 20 0" stroke="#1a1a1a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <!-- axe -->
+    <rect x="44" y="-14" width="6" height="44" rx="3" fill="#6a4526" transform="rotate(-32 47 8)"/>
+    <path d="M50 -18 l16 -4 -2 16 -14 2z" fill="#c8ccd2" transform="rotate(-32 57 -4)"/>
+  </g>
+  <!-- wolf approaching -->
+  <g transform="translate(320 402)">
+    <ellipse cx="30" cy="18" rx="30" ry="15" fill="#3a4048"/>
+    <path d="M2 14 l-14 -6 6 12z" fill="#3a4048"/>
+    <circle cx="-8" cy="10" r="2.6" fill="#ff5b5b"/>
+    <polygon points="-14,2 -10,-8 -4,2" fill="#2c3138"/>
+    <rect x="14" y="28" width="6" height="16" rx="3" fill="#2c3138"/>
+    <rect x="42" y="28" width="6" height="16" rx="3" fill="#2c3138"/>
+  </g>
+  <rect x="24" y="26" width="330" height="52" rx="12" fill="rgba(0,0,0,0.5)"/>
+  <text x="44" y="60" font-family="Arial, sans-serif" font-size="26" font-weight="900" fill="#ffcf6b">99 NIGHTS 🔥</text>
+</svg>

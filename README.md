@@ -1,8 +1,8 @@
 # 🟦 BLOXVERSE
 
-A fan-made, **browser-only** blocky game platform: a full website with five playable 3D games,
-AI players that *actually play* every game, and a mood-driven AI chat system — all running
-client-side with **zero backend, zero API keys, zero build step**.
+A fan-made, **browser-only** blocky game platform: a full website with six playable 3D games,
+online multiplayer, AI players that *actually play* every game, and a mood-driven AI chat
+system — all running client-side with **zero build step**.
 
 > Bloxverse is an original hobby project. It is not affiliated with, endorsed by, or connected
 > to Roblox Corporation or any game studio. All code, 3D models, animations, artwork, and audio
@@ -30,8 +30,9 @@ Then open **http://localhost:8080**. Works on GitHub Pages too — just serve th
 | **Jujutsu Shenanigans** | Fighting | City battleground, 4-hit M1 combos, 4 cursed abilities, block/dash, **Awakening** ult, ragdolls & break-apart KOs |
 | **RIVALS** | Shooter | Team deathmatch rounds to 20, AR/Shotgun/Sniper/Pistol, headshots, reloads, sniper scope, round intermissions |
 | **Welcome to Bloxville** | Life sim | Your own plot, Build Mode with 14 furniture items (auto-saves), Bloxy Burgers job minigame with promotions, needs, day/night cycle, AI neighbors with schedules |
-| **Mega Sky Obby** | Platformer | 30 stages — kill bricks, spinners, movers, vanishing tiles — checkpoints, live race vs 5 AI runners, summit crown |
+| **Mega Sky Obby** | Platformer | 30 stages from a library of 12 obstacle types — jumps, staircases, zigzags, tightropes, stepping stones, kill bricks, moving platforms, conveyors, swinging wrecking balls, vanishing tiles, shrinking gauntlets, spinners — checkpoints, live race vs AI runners, summit crown |
 | **Zombie Blocks: Last Stand** | Survival | Endless night waves (walkers/runners/brutes), points economy, wall-buy weapons, 3 AI squadmates |
+| **99 Nights in the Forest** | Co-op survival | Chop wood & pick berries by day, feed the central campfire, fight wolves each night with your axe, day/night cycle counting Nights survived (99 to win), hunger, AI survivor companions, host-authoritative co-op |
 
 ## 🤖 The AI players
 

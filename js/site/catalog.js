@@ -170,6 +170,41 @@ Every 5 waves the horde gets faster. Good luck.`,
       ['W A S D', 'Move'],
     ],
   },
+  {
+    id: 'nights',
+    name: '99 Nights in the Forest',
+    creator: 'Emberwood Games',
+    genre: 'Survival',
+    rating: 95,
+    basePlaying: 88700,
+    visits: '1.9B+',
+    created: 'Jun 2025',
+    updated: '1 day ago',
+    serverSize: 5,
+    maxPlayers: 5,
+    thumb: 'assets/thumbs/nights.svg',
+    tagline: 'Gather by day. Feed the fire. Survive the night.',
+    desc: `🔥 99 NIGHTS IN THE FOREST — a Bloxverse co-op survival.
+
+The forest is safe by day — but when the sun goes down, things come out of the trees. Keep the campfire burning, keep your belly full, and keep your friends alive. How many nights can you last?
+
+🪓 Chop trees for wood and pick berries for food (hold E)
+🔥 Feed wood to the campfire — if it dies at night, so might you
+🐺 Fend off wolves and forest beasts every night with your axe
+🌙 Full day/night cycle — each dawn you survive is one more Night
+🧑‍🤝‍🧑 AI survivors gather and fight beside you (and get spooked in chat)
+🤝 Co-op multiplayer — share the fire with friends
+📱 Custom mobile attack + interact buttons
+
+Reach Night 99 to win. Most people don't.`,
+    controls: [
+      ['Left Click', 'Swing axe'],
+      ['E', 'Chop / pick / feed fire (hold)'],
+      ['F', 'Eat food'],
+      ['Space', 'Jump'],
+      ['W A S D', 'Move'],
+    ],
+  },
 ];
 
 export function getGame(id) {
