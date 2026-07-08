@@ -1,13 +1,22 @@
 /* ============================================================
    BLOXVERSE — in-game HUD + mobile controls
    ============================================================ */
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+* {
+  box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent;
+  /* Stop the browser selecting HUD text / firing the long-press callout while
+     you drag on the joystick, look area, or action buttons (mobile bug). */
+  -webkit-user-select: none; -moz-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
 html, body { height: 100%; overflow: hidden; background: #111; }
 body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-body.playing { position: fixed; inset: 0; width: 100%; }
+body.playing { position: fixed; inset: 0; width: 100%; touch-action: none; overscroll-behavior: none; }
 
 #gameRoot, .game-root { position: fixed; inset: 0; overflow: hidden; }
 .game-root canvas { display: block; touch-action: none; }
+
+/* The chat box is the one place you actually want to select / edit text. */
+.chat-input-row input { -webkit-user-select: text; user-select: text; }
 
 /* ---------------- loading screen ---------------- */
 #loadScreen {

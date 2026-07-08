@@ -32,7 +32,7 @@ Then open **http://localhost:8080**. Works on GitHub Pages too — just serve th
 | **Welcome to Bloxville** | Life sim | Your own plot, Build Mode with 14 furniture items (auto-saves), Bloxy Burgers job minigame with promotions, needs, day/night cycle, AI neighbors with schedules |
 | **Mega Sky Obby** | Platformer | 30 stages from a library of 12 obstacle types — jumps, staircases, zigzags, tightropes, stepping stones, kill bricks, moving platforms, conveyors, swinging wrecking balls, vanishing tiles, shrinking gauntlets, spinners — checkpoints, live race vs AI runners, summit crown |
 | **Zombie Blocks: Last Stand** | Survival | Endless night waves (walkers/runners/brutes), points economy, wall-buy weapons, 3 AI squadmates |
-| **99 Nights in the Forest** | Co-op survival | Chop wood & pick berries by day, feed the central campfire, fight wolves each night with your axe, day/night cycle counting Nights survived (99 to win), hunger, AI survivor companions, host-authoritative co-op |
+| **99 Nights in the Forest** | Co-op survival | A big forest with a survivor camp (cabin, tents, watchtower, well, palisade) and spooky landmarks (ruins, graveyards). Chop wood & pick berries by day, feed the campfire, and fight the night horde — wolves, spiders, bears, and a towering **Forest Giant boss** on blood-moon nights (every 5th). Darker fog-choked nights, glowing eyes, day/night cycle counting Nights survived (99 to win), hunger, AI survivor companions, host-authoritative co-op |
 
 ## 🤖 The AI players
 
