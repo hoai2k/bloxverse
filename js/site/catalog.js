@@ -183,24 +183,27 @@ Every 5 waves the horde gets faster. Good luck.`,
     serverSize: 5,
     maxPlayers: 5,
     thumb: 'assets/thumbs/nights.svg',
-    tagline: 'Gather by day. Feed the fire. Survive the night.',
+    tagline: 'Gather, craft, and keep the fire lit — before the Deer finds you.',
     desc: `🔥 99 NIGHTS IN THE FOREST — a Bloxverse co-op survival.
 
-The forest is safe by day — but when the sun goes down, things come out of the trees. Keep the campfire burning, keep your belly full, and keep your friends alive. How many nights can you last?
+The forest is safe by day — but when the sun goes down, something wakes in the trees. Keep the campfire burning, craft your gear, and never let your flashlight die. How many nights can you last?
 
-🪓 Chop trees for wood and pick berries for food (hold E)
-🔥 Feed wood to the campfire — if it dies at night, so might you
-🐺 Fend off wolves and forest beasts every night with your axe
+🦌 THE DEER — one towering, unkillable stalker hunts you every night. You can't fight it. Only your FLASHLIGHT turns it away — and it learns to shrug off the beam the more you lean on it. Keep that battery charged.
+🔦 Flashlight & batteries — recharge at the fire, loot spares from chests, craft a Strong Flashlight for a brighter, longer stun
+🔨 Crafting bench — upgrade it Lv 1→4 and craft spears, bandages, crock-pot meals, batteries, beds and more from wood, scrap & gems
+🧰 Loot chests (Common → Diamond) hidden in cabins, radio towers, ruins & a spider cave — some guarded by a beast
+🐺 Wolves, spiders, bears and a Blood-Moon Forest Giant boss still prowl the dark
+🐰 Hunt bunnies for meat, chop trees, pick berries, keep your hunger up
 🌙 Full day/night cycle — each dawn you survive is one more Night
-🧑‍🤝‍🧑 AI survivors gather and fight beside you (and get spooked in chat)
-🤝 Co-op multiplayer — share the fire with friends
-📱 Custom mobile attack + interact buttons
+🧑‍🤝‍🧑 AI survivors fight beside you · 🤝 Co-op multiplayer · 📱 Custom mobile buttons
 
 Reach Night 99 to win. Most people don't.`,
     controls: [
-      ['Left Click', 'Swing axe'],
-      ['E', 'Chop / pick / feed fire (hold)'],
+      ['Left Click', 'Swing axe / hunt'],
+      ['E', 'Chop / pick / feed fire / open chest / craft (hold)'],
+      ['Q', 'Toggle flashlight'],
       ['F', 'Eat food'],
+      ['R', 'Use bandage'],
       ['Space', 'Jump'],
       ['W A S D', 'Move'],
     ],

@@ -153,22 +153,105 @@ function buildGiant() {
   return g;
 }
 
+// THE DEER — the marquee horror. A gaunt, too-tall humanoid stag with a bleached
+// skull for a face and antlers scraping the fog. Cannot be killed; only a
+// flashlight beam turns it away. Its eyes burn brighter (red) when it hungers.
+function buildDeer() {
+  const g = new THREE.Group();
+  const hide = new THREE.MeshLambertMaterial({ color: '#20242a' });
+  const skin = new THREE.MeshLambertMaterial({ color: '#2b2f36' });
+  const bone = new THREE.MeshLambertMaterial({ color: '#d8d2c2' });
+  // long spindly torso, hunched forward
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.4, 1.1), hide);
+  torso.position.y = 6.4; torso.rotation.x = 0.16; torso.castShadow = true; g.add(torso);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.4, 1.3), hide);
+  chest.position.set(0, 7.9, 0.15); g.add(chest);
+  const ribs = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.6, 1.15), skin);
+  ribs.position.set(0, 5.5, 0.05); g.add(ribs);
+  // neck + elongated deer skull
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.6), skin);
+  neck.position.set(0, 8.9, 0.5); neck.rotation.x = -0.35; g.add(neck);
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.95, 1.9), bone);
+  skull.position.set(0, 9.7, 1.15); skull.castShadow = true; g.add(skull);
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.55, 0.9), bone);
+  snout.position.set(0, 9.5, 2.1); g.add(snout);
+  // glowing eyes (recolored to red when hungry via userData.eyes)
+  const eyes = [];
+  for (const sx of [-0.28, 0.28]) {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.14), glowEye('#eaff6a'));
+    eye.position.set(sx, 9.85, 1.95); g.add(eye); eyes.push(eye);
+  }
+  g.userData.eyes = eyes;
+  // branching antlers
+  const antlerMat = new THREE.MeshLambertMaterial({ color: '#b6ac93' });
+  for (const side of [-1, 1]) {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 2.2, 5), antlerMat);
+    base.position.set(side * 0.35, 10.9, 1.0); base.rotation.z = side * 0.5; base.rotation.x = -0.3; g.add(base);
+    for (const [ty, tz, tl, tr] of [[11.7, 1.4, 1.1, 0.6], [12.2, 0.6, 1.0, -0.5], [11.2, 1.9, 0.9, 0.9]]) {
+      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, tl, 4), antlerMat);
+      tine.position.set(side * (0.9 + Math.abs(tz - 1) * 0.2), ty, tz); tine.rotation.z = side * tr; g.add(tine);
+    }
+  }
+  // long forelimbs (arms) that hang, and digitigrade back legs
+  const arms = [];
+  for (const side of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(side * 0.95, 8.0, 0.2); g.add(sh);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 3.6, 0.42), skin);
+    arm.position.y = -1.7; arm.castShadow = true; sh.add(arm);
+    const claw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.5), hide);
+    claw.position.y = -3.7; sh.add(claw);
+    arms.push({ sh, side });
+  }
+  g.userData.arms = arms;
+  const legs = [];
+  for (const [lx, ph] of [[-0.55, 0], [0.55, Math.PI]]) {
+    const hip = new THREE.Group(); hip.position.set(lx, 4.7, 0); g.add(hip);
+    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), hide);
+    thigh.position.y = -1.3; thigh.castShadow = true; hip.add(thigh);
+    const shin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 0.4), skin);
+    shin.position.set(0, -3.3, 0.25); hip.add(shin);
+    legs.push({ hip, ph });
+  }
+  g.userData.legs = legs; g.userData.deer = true;
+  return g;
+}
+
+// passive forest wildlife: bunnies you can hunt for meat (food).
+function buildBunny() {
+  const g = new THREE.Group();
+  const furMat = new THREE.MeshLambertMaterial({ color: '#c9bfae' });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), furMat);
+  body.position.y = 0.55; body.scale.set(1, 0.85, 1.3); body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), furMat);
+  head.position.set(0, 0.8, 0.5); g.add(head);
+  for (const sx of [-0.12, 0.12]) {
+    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.08), furMat);
+    ear.position.set(sx, 1.2, 0.45); ear.rotation.x = -0.15; g.add(ear);
+  }
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), new THREE.MeshLambertMaterial({ color: '#fff' }));
+  tail.position.set(0, 0.6, -0.55); g.add(tail);
+  return g;
+}
+
 // stats per monster type. ward=true: the campfire hurts/repels it.
+// invuln=true: cannot be damaged (The Deer). light=true: flashlight repels it.
 const MOB_TYPES = {
   wolf:   { idx: 0, hp: 30,  speed: 11.5, dmg: 9,  reach: 4,  scale: 1,    pts: 1,  ward: true,  build: buildWolf,   chest: 2.4, height: 3 },
   spider: { idx: 1, hp: 15,  speed: 16,   dmg: 6,  reach: 3.4, scale: 0.9, pts: 1,  ward: true,  build: buildSpider, chest: 1.7, height: 2.5 },
   bear:   { idx: 2, hp: 95,  speed: 8.5,  dmg: 24, reach: 5,  scale: 1,    pts: 3,  ward: false, build: buildBear,   chest: 3.2, height: 4 },
   giant:  { idx: 3, hp: 620, speed: 6,    dmg: 48, reach: 8,  scale: 1,    pts: 20, ward: false, boss: true, build: buildGiant, chest: 9, height: 15 },
+  deer:   { idx: 4, hp: 99999, speed: 9.5, dmg: 34, reach: 5.5, scale: 1,  pts: 0,  ward: false, invuln: true, light: true, deer: true, build: buildDeer, chest: 2.6, height: 12 },
 };
-const MOB_BY_IDX = ['wolf', 'spider', 'bear', 'giant'];
+const MOB_BY_IDX = ['wolf', 'spider', 'bear', 'giant', 'deer'];
 
 function animMob(g, dt, speed, t) {
-  const amp = Math.min(g.userData.giant ? 0.5 : 0.85, speed * 0.06);
-  if (g.userData.legs) for (const l of g.userData.legs) l.hip.rotation.x = Math.sin(t * (g.userData.giant ? 4 : g.userData.crawl ? 13 : 10) + l.ph) * amp;
+  const amp = Math.min(g.userData.giant ? 0.5 : g.userData.deer ? 0.7 : 0.85, speed * 0.06);
+  const cad = g.userData.giant ? 4 : g.userData.deer ? 6 : g.userData.crawl ? 13 : 10;
+  if (g.userData.legs) for (const l of g.userData.legs) l.hip.rotation.x = Math.sin(t * cad + l.ph) * amp;
   if (g.userData.arms) {
     // giant idle arm sway; smash overrides via userData.smash (0..1)
     const sm = g.userData.smash || 0;
-    for (const a of g.userData.arms) a.sh.rotation.x = -Math.sin(t * 4 + (a.side > 0 ? Math.PI : 0)) * amp * 0.6 - sm * 2.4;
+    for (const a of g.userData.arms) a.sh.rotation.x = -Math.sin(t * (g.userData.deer ? 3 : 4) + (a.side > 0 ? Math.PI : 0)) * amp * 0.6 - sm * 2.4;
   }
 }
 
@@ -362,14 +445,104 @@ export default async function launch({ root, user, game }) {
     return c;
   }
 
+  // ---- loot chests (opened for supplies; some guard a lurking beast) ----
+  const chests = [];
+  const CHEST_COL = { common: '#7a5a34', good: '#4d6f96', iron: '#8a8f96', diamond: '#3fd8c4' };
+  function buildChest(x, z, tier, guardType) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rand(0, 6.28); scene.add(g);
+    const col = CHEST_COL[tier] || CHEST_COL.common;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 1.6), plank(col, 1));
+    base.position.y = 0.65; base.castShadow = true; g.add(base);
+    const lidPivot = new THREE.Group(); lidPivot.position.set(0, 1.3, -0.8); g.add(lidPivot);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.6, 1.7), plank(col, 1));
+    lid.position.set(0, 0, 0.8); lid.castShadow = true; lidPivot.add(lid);
+    const emissive = tier === 'diamond' ? '#2fc0b0' : tier === 'iron' ? '#555a60' : '#8a6a1a';
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.22),
+      W.mat(tier === 'diamond' ? '#8ff0e0' : tier === 'iron' ? '#c2c6cc' : '#d4b24a', { emissive, emissiveIntensity: 0.5 }));
+    lock.position.set(0, 0.7, 0.85); g.add(lock);
+    world.addBox3(new THREE.Box3(new THREE.Vector3(x - 1.3, 0, z - 1), new THREE.Vector3(x + 1.3, 1.3, z + 1)));
+    const chest = { group: g, lid: lidPivot, lock, pos: new THREE.Vector3(x, 0, z), tier, opened: false, guardType: guardType || null, guardSpawned: false };
+    chests.push(chest);
+    return chest;
+  }
+
+  // ---- crafting bench (opens the crafting panel) ----
+  let benchPos = new THREE.Vector3();
+  function buildBench(x, z, ry) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry || 0; scene.add(g);
+    const wood = plank('#7a5230', 2);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 2), wood); top.position.y = 1.6; top.castShadow = true; g.add(top);
+    for (const [lx, lz] of [[-1.7, -0.8], [1.7, -0.8], [-1.7, 0.8], [1.7, 0.8]]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.6, 0.3), wood); leg.position.set(lx, 0.8, lz); g.add(leg);
+    }
+    // vise + tools on top
+    const vise = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.7), W.mat('#6a6f76')); vise.position.set(-1.3, 2.1, 0); g.add(vise);
+    const saw = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 0.08), W.mat('#c8ccd2')); saw.position.set(0.8, 2.0, -0.4); saw.rotation.z = 0.3; g.add(saw);
+    const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.5), W.mat('#3a3f46')); anvil.position.set(1.2, 1.95, 0.4); g.add(anvil);
+    world.addBox3(new THREE.Box3(new THREE.Vector3(x - 2.2, 0, z - 1.2), new THREE.Vector3(x + 2.2, 1.7, z + 1.2)));
+    benchPos.set(x, 0, z);
+    return g;
+  }
+
+  function buildRadioTower(x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+    const steel = W.mat('#8a3a34');
+    for (const [lx, lz] of [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 28, 5), steel);
+      leg.position.set(lx * (1 - 0.5), 14, lz * (1 - 0.5)); leg.rotation.x = lz * 0.02; leg.rotation.z = -lx * 0.02; leg.castShadow = true; g.add(leg);
+    }
+    for (let y = 3; y < 28; y += 4) {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(3.4 * (1 - y / 40), 0.2, 0.2), steel); brace.position.set(0, y, y % 8 < 4 ? -1.6 : 1.6); g.add(brace);
+      const brace2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 3.4 * (1 - y / 40)), steel); brace2.position.set(y % 8 < 4 ? -1.6 : 1.6, y, 0); g.add(brace2);
+    }
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff3b30' }));
+    beacon.position.y = 29; g.add(beacon); g.userData.beacon = beacon;
+    const beaconLight = new THREE.PointLight(0xff3b30, 6, 60, 1.5); beaconLight.position.y = 29; g.add(beaconLight); g.userData.beaconLight = beaconLight;
+    for (const [lx, lz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]])
+      world.addBox3(new THREE.Box3(new THREE.Vector3(x + lx - 0.5, 0, z + lz - 0.5), new THREE.Vector3(x + lx + 0.5, 26, z + lz + 0.5)));
+    radioTowers.push(g);
+    return g;
+  }
+  const radioTowers = [];
+
+  function buildCave(x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rand(0, 6.28); scene.add(g);
+    const rockMat = W.mat('#5a5f66');
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const boulder = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(3, 5)), rockMat);
+      boulder.position.set(Math.cos(a) * 8, rand(1, 3.5), Math.sin(a) * 8 - 3); boulder.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3)); boulder.castShadow = true; g.add(boulder);
+    }
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(9, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), rockMat);
+    dome.position.set(0, 0, -3); dome.scale.set(1, 0.8, 1); g.add(dome);
+    const maw = new THREE.Mesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshBasicMaterial({ color: '#050608' }));
+    maw.position.set(0, 2.6, 3.5); maw.scale.set(1, 1.2, 0.6); g.add(maw);
+    // collide the surrounding boulder ring (leave the mouth open)
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2; if (Math.abs(a - Math.PI / 2) < 0.5) continue;
+      const bx = x + Math.cos(a) * 8, bz = z + Math.sin(a) * 8 - 3;
+      world.addBox3(new THREE.Box3(new THREE.Vector3(bx - 2.5, 0, bz - 2.5), new THREE.Vector3(bx + 2.5, 6, bz + 2.5)));
+    }
+    return g;
+  }
+
+  // passive wildlife (bunnies you can hunt for meat)
+  const critters = [];
+  function spawnBunny(x, z) {
+    const g = buildBunny(); g.position.set(x, 0, z); scene.add(g);
+    critters.push({ group: g, pos: new THREE.Vector3(x, 0, z), vx: 0, vz: 0, hopT: rand(0, 1.5), flee: 0, alive: true, y: 0 });
+  }
+
   // ---- place the camp around the fire ----
   const cabin = buildCabin(-16, -14, 0.6);
   buildTent(14, -12, '#8a5a3a'); buildTent(18, -6, '#5a6a8a');
   const tower = buildWatchtower(16, 14);
   buildWell(-14, 14);
+  buildBench(-3, -17, 0.2);                 // crafting bench behind the fire
   buildFenceArc(0, 0, 20, Math.PI * 0.15, Math.PI * 0.85, 12);
   buildFenceArc(0, 0, 20, Math.PI * 1.15, Math.PI * 1.85, 12);
   buildCrate(6, -10); buildCrate(-8, 8);
+  buildChest(10, 6, 'common');              // a starter cache in camp
 
   // ---- forest: dense scatter across the big map ----
   for (let i = 0; i < 78; i++) {
@@ -394,10 +567,24 @@ export default async function launch({ root, user, game }) {
     rock.position.set(p.x, 0.5, p.z); rock.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3)); rock.castShadow = true; scene.add(rock);
     world.addBox3(new THREE.Box3(new THREE.Vector3(p.x - 1.6, 0, p.z - 1.6), new THREE.Vector3(p.x + 1.6, 2.2, p.z + 1.6)));
   }
-  // scary landmarks out in the woods
+  // scary landmarks out in the woods, each hiding loot (some guarded)
   buildRuin(-120, -90); buildRuin(140, 60);
   buildGraves(90, -150); buildGraves(-160, 40);
   buildCrate(120, -120); buildCrate(-140, 130);
+  // radio towers — best place to scavenge batteries
+  buildRadioTower(150, -80); buildRadioTower(-190, -60);
+  buildChest(150, -72, 'good'); buildChest(-190, -52, 'good');
+  // a bat/spider cave, guarded
+  buildCave(-110, 120); buildChest(-110, 122, 'iron', 'spider');
+  // abandoned cabins deep in the trees, each with a cache
+  buildCabin(180, 150, 2.1); buildChest(178, 156, 'good');
+  buildCabin(-150, -170, -1.0); buildChest(-150, -164, 'iron', 'bear');
+  buildCabin(60, 190, 0.4); buildChest(60, 196, 'common');
+  // ruin & graveyard loot
+  buildChest(-120, -84, 'iron'); buildChest(140, 66, 'diamond', 'bear');
+  buildChest(90, -144, 'good'); buildChest(-160, 46, 'common');
+  // wildlife scattered through the meadows
+  for (let i = 0; i < 14; i++) { const p = scatterPos(30, MAP - 50); spawnBunny(p.x, p.z); }
 
   // dense boundary tree wall + invisible fence
   for (let i = 0; i < 120; i++) {
@@ -437,6 +624,9 @@ export default async function launch({ root, user, game }) {
       id: nextId++, name, char, ctrl, isPlayer, bot,
       hp: 100, alive: true, downed: false, wood: 0, food: 0, kills: 0,
       hunger: 100, swingCd: 0, gatherT: 0,
+      // crafting inventory + flashlight (player-relevant)
+      scrap: 0, gem: 0, batteries: isPlayer ? 1 : 0, bandages: 0,
+      light: 100, maxLight: 100, lightOn: false, strongLight: false, hasSpear: false,
       ai: bot ? { skill, target: null, retargetT: 0, task: 'gather', node: null, chopT: 0 } : null,
     };
     if (bot) h.chat = chatter.register(name, bot.brain, char);
@@ -460,25 +650,126 @@ export default async function launch({ root, user, game }) {
   app.followTarget = player.char.group;
   chatter.playerChar = player.char;
 
+  // ================= flashlight (the ONLY thing that turns the Deer away) =====
+  // A real spotlight aimed along the camera's look direction. Holding it on
+  // drains the battery; standing by the fire recharges it. When the cone
+  // catches the Deer, the Deer is stunned — longer with the Strong Flashlight,
+  // and it builds resistance the more you rely on it.
+  const flashlight = new THREE.SpotLight(0xfff2c8, 0, 70, Math.PI / 7, 0.4, 1.2);
+  flashlight.position.set(0, 2, 0);
+  flashlight.target.position.set(0, 2, 10);
+  scene.add(flashlight); scene.add(flashlight.target);
+  // the physical torch in the survivor's hand
+  const torch = new THREE.Group();
+  const torchBody = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.7, 8), W.mat('#2a2d33'));
+  torchBody.rotation.x = Math.PI / 2; torch.add(torchBody);
+  const torchLens = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 8), new THREE.MeshBasicMaterial({ color: '#4a4d55' }));
+  torchLens.rotation.x = Math.PI / 2; torchLens.position.z = 0.4; torch.add(torchLens);
+  // mount on the LEFT hand so the axe stays in the right
+  torch.position.set(0, -0.3, 0.25); torch.rotation.x = -0.4;
+  player.char.joints.lWrist.add(torch);
+  const camDir = new THREE.Vector3();
+  function lightMax(h) { return h.strongLight ? 220 : 100; }
+  function toggleLight() {
+    if (!player.alive) return;
+    player.lightOn = !player.lightOn;
+    if (player.lightOn && player.light <= 0 && !tryReloadBattery()) {
+      player.lightOn = false; ui.system('Flashlight is dead — recharge at the fire or use a battery.'); return;
+    }
+    sfx.play('click');
+    torchLens.material.color.set(player.lightOn ? '#fff2b0' : '#4a4d55');
+    updatePills();
+  }
+  function tryReloadBattery() {
+    if (player.batteries <= 0) return false;
+    player.batteries--; player.light = Math.min(lightMax(player), player.light + 60);
+    ui.system(`Swapped in a battery (+60🔋). ${player.batteries} left.`);
+    updatePills(); return true;
+  }
+  function updateFlashlight(dt) {
+    // aim along where the camera looks
+    camera.getWorldDirection(camDir);
+    const px = player.ctrl.pos.x, py = player.ctrl.pos.y + 1.7, pz = player.ctrl.pos.z;
+    flashlight.position.set(px, py, pz);
+    flashlight.target.position.set(px + camDir.x * 12, py + camDir.y * 12, pz + camDir.z * 12);
+    const on = player.lightOn && player.alive && player.light > 0;
+    flashlight.intensity = on ? (player.strongLight ? 120 : 65) : 0;
+    flashlight.distance = player.strongLight ? 95 : 70;
+    flashlight.angle = player.strongLight ? Math.PI / 6 : Math.PI / 7;
+    torchLens.material.color.set(on ? (player.strongLight ? '#dff0ff' : '#fff2b0') : '#4a4d55');
+    if (on) {
+      player.light = Math.max(0, player.light - dt * (player.strongLight ? 3.0 : 4.2));
+      if (player.light <= 0 && !tryReloadBattery()) { player.lightOn = false; ui.system('Flashlight died!'); }
+      // shine on the Deer?
+      const target = deer && deer.alive ? deer : proxies.get(deerProxyId());
+      if (target) beamStun(target, dt);
+    }
+    // recharge next to the campfire
+    if (!on && distXZ(player.ctrl.pos, FIRE) < 10 && save.fuel > 3 && player.light < lightMax(player)) {
+      player.light = Math.min(lightMax(player), player.light + dt * 14);
+    }
+  }
+  function deerProxyId() {
+    for (const [id, p] of proxies) if (p.type && p.type.deer) return id;
+    return null;
+  }
+  function beamStun(target, dt) {
+    const tp = target.ctrl ? target.ctrl.pos : target.group.position;
+    const dx = tp.x - player.ctrl.pos.x, dz = tp.z - player.ctrl.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > (player.strongLight ? 60 : 42)) return;
+    const dot = (dx / (d || 1)) * camDir.x + (dz / (d || 1)) * camDir.z;
+    if (dot < 0.86) return; // not within the beam cone
+    // apply stun (host applies directly; client asks the host)
+    const dur = player.strongLight ? 2.4 : 1.4;
+    if (net && !net.isHost) { deerStunAcc = (deerStunAcc || 0) + dt; if (deerStunAcc > 0.2) { net.sendTopic('dstun', { dur }); deerStunAcc = 0; } }
+    else if (deer && deer.alive) applyDeerStun(deer, dur);
+    if (!beamHitT || performance.now() - beamHitT > 500) { beamHitT = performance.now(); sfx.play('hit', { volume: 0.3 }); }
+    app.burst(tp.clone().add(new THREE.Vector3(0, 9, 0)), { color: '#fff2b0', count: 3, speed: 4, size: 0.3, life: 0.3 });
+  }
+  let beamHitT = 0, deerStunAcc = 0;
+  function applyDeerStun(w, dur) {
+    // resistance grows so you can't perma-stun; a hungry deer shrugs it off fast
+    const eff = dur * Math.max(0.28, 1 - w.stunResist * 0.12) * (w.hungry ? 0.6 : 1);
+    w.stunT = Math.max(w.stunT, eff);
+    w.stunResist = Math.min(6, w.stunResist + 0.5);
+    w.chaseT = 0; // buys you a fresh head start
+  }
+
   // ================= monsters (host-authoritative) =================
-  const wolves = []; // holds ALL mobs (wolves, spiders, bears, the giant)
-  function spawnMob(typeId) {
+  const wolves = []; // holds ALL mobs (wolves, spiders, bears, the giant, the deer)
+  let deer = null;   // THE DEER — a single invulnerable stalker, spawned at night
+  function spawnMob(typeId, at) {
     const T = MOB_TYPES[typeId];
     const g = T.build();
     g.scale.setScalar(T.scale);
-    // spawn from the treeline — the boss lumbers in closer so it reaches camp
-    const edge = T.boss ? scatterPos(MAP * 0.22, MAP * 0.34) : scatterPos(MAP * 0.32, MAP * 0.58);
+    // spawn at a given spot (chest guard) or from the treeline; the boss and
+    // the deer lumber in closer so they reach camp.
+    const edge = at ? new THREE.Vector3(at.x, 0, at.z)
+      : (T.boss || T.deer) ? scatterPos(MAP * 0.22, MAP * 0.36) : scatterPos(MAP * 0.32, MAP * 0.58);
     g.position.set(edge.x, 0, edge.z);
     scene.add(g);
     const hpMul = T.boss ? (1 + save.night * 0.03) : (1 + save.night * 0.06);
     const ctrl = new CharController({ speed: (T.speed + save.night * 0.18), halfW: T.chest * 0.5, height: T.height });
     ctrl.teleport(edge.x, 0.6, edge.z);
     const w = {
-      id: 'w' + nextId++, nid: wseq++, group: g, ctrl, typeId, type: T, boss: !!T.boss,
+      id: 'w' + nextId++, nid: wseq++, group: g, ctrl, typeId, type: T, boss: !!T.boss, deer: !!T.deer,
       hp: T.hp * hpMul, maxHp: T.hp * hpMul,
       alive: true, attackT: 0, target: null, retargetT: 0, phase: Math.random() * 6, smashT: 0,
+      // deer-only state
+      stunT: 0, stunResist: 0, chaseT: 0, hungry: false, guard: !!at,
     };
     wolves.push(w);
+    if (T.deer) deer = w;
+    return w;
+  }
+  // spawn the Deer for the night (only ever one). It hungers on boss nights.
+  function spawnDeer(hungry) {
+    if (deer && deer.alive) return deer;
+    const w = spawnMob('deer');
+    w.hungry = !!hungry;
+    w.ctrl.speed = MOB_TYPES.deer.speed * (hungry ? 1.25 : 1) + save.night * 0.1;
+    if (hungry) for (const e of w.group.userData.eyes || []) e.material.color.set('#ff2a20');
     return w;
   }
   function pickMobType(night) {
@@ -506,8 +797,10 @@ export default async function launch({ root, user, game }) {
       { icon: phase === 'night' ? '🌙' : '☀️', value: phase === 'night' ? `Night ${night}` : `Day ${night + 1}`, color: phase === 'night' ? '#8fa0ff' : undefined },
       { icon: '🔥', value: `${Math.ceil(fuel)}%`, label: 'fire', color: fuel < 25 ? '#f74d59' : undefined },
       { icon: '🪵', value: player.wood, label: 'wood' },
-      { icon: '🍓', value: player.food, label: 'food' },
+      { icon: '🔩', value: player.scrap, label: 'scrap' },
+      { icon: '🍖', value: player.food, label: 'food' },
       { icon: '🍗', value: Math.ceil(player.hunger), label: 'hunger', color: player.hunger < 25 ? '#f74d59' : undefined },
+      { icon: player.lightOn ? '🔦' : '🔋', value: `${Math.ceil(player.light)}${player.batteries ? ' +' + player.batteries : ''}`, label: 'light', color: player.light < 20 ? '#f74d59' : (player.lightOn ? '#ffe08a' : undefined) },
     ]);
   }
   ui.setBoard(['Wood', 'Kills']);
@@ -569,27 +862,221 @@ export default async function launch({ root, user, game }) {
     },
   }));
 
+  // ================= loot chests =================
+  const LOOT_ICON = { wood: '🪵', food: '🍖', scrap: '🔩', gem: '💎', battery: '🔋', bandage: '🩹', strong: '🔦' };
+  const LOOT = {
+    common:  [['wood', 3, 6], ['food', 1, 3], ['scrap', 1, 2]],
+    good:    [['scrap', 2, 5], ['food', 2, 3], ['battery', 1, 1], ['bandage', 0, 1]],
+    iron:    [['scrap', 3, 7], ['battery', 1, 2], ['gem', 0, 1], ['bandage', 1, 1]],
+    diamond: [['gem', 1, 2], ['battery', 2, 3], ['scrap', 5, 9], ['strong', 0, 1]],
+  };
+  function grantLoot(item, n) {
+    if (item === 'strong') {
+      if (n > 0 && !player.strongLight) { player.strongLight = true; player.maxLight = 220; player.light = 220; return '🔦 STRONG FLASHLIGHT!'; }
+      return null;
+    }
+    if (n <= 0) return null;
+    if (item === 'wood') player.wood += n;
+    else if (item === 'food') player.food += n;
+    else if (item === 'scrap') player.scrap += n;
+    else if (item === 'gem') player.gem += n;
+    else if (item === 'battery') player.batteries += n;
+    else if (item === 'bandage') player.bandages += n;
+    return `+${n} ${LOOT_ICON[item]}`;
+  }
+  function openChest(c) {
+    if (c.opened) return;
+    c.opened = true;
+    c.lid.rotation.x = -1.9;
+    if (c.lock) c.lock.visible = false;
+    sfx.play('buy', { volume: 0.5 });
+    const table = LOOT[c.tier] || LOOT.common;
+    const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    const lines = [];
+    for (const [item, mn, mx] of table) { const s = grantLoot(item, randInt(mn, mx)); if (s) lines.push(s); }
+    let yoff = 2.4;
+    for (const s of lines) { ui.popup(camera, c.pos.clone().add(new THREE.Vector3(0, yoff, 0)), s, '#ffe08a', 16); yoff += 1.1; }
+    ui.system(`Opened ${c.tier} chest — ${lines.join(', ') || 'empty…'}`);
+    updatePills(); refreshBoard();
+  }
+  for (const c of chests) {
+    prompts.push(ui.addPrompt({
+      getPos: () => c.pos.clone().add(new THREE.Vector3(0, 2, 0)),
+      text: `🧰 Open ${c.tier} chest`, key: 'E', radius: 5, hold: 0.8,
+      filter: () => !c.opened && !busy && !craftOpen && (!c.guardType || !c.guardRef || !c.guardRef.alive),
+      onTrigger: () => openChest(c),
+    }));
+  }
+  // guarded chests wake their beast when a survivor gets close (host-authoritative)
+  function checkChestGuards() {
+    for (const c of chests) {
+      if (!c.guardType || c.guardSpawned || c.opened) continue;
+      if (distXZ(player.ctrl.pos, c.pos) < 20) {
+        c.guardSpawned = true;
+        c.guardRef = spawnMob(c.guardType, { x: c.pos.x + 3, z: c.pos.z + 3 });
+        ui.system(`A ${c.guardType} guards that ${c.tier} chest!`);
+        sfx.play('growl', { volume: 0.5 });
+      }
+    }
+  }
+
+  // ================= wildlife (bunnies → meat) =================
+  function huntCritters() {
+    for (const c of critters) {
+      if (!c.alive) continue;
+      if (distXZ(player.ctrl.pos, c.pos) < 3.6) {
+        c.alive = false; scene.remove(c.group);
+        player.food += 2;
+        ui.popup(camera, c.pos.clone().add(new THREE.Vector3(0, 1.5, 0)), '+2 🍖', '#e0a06a', 16);
+        sfx.play('punch', { volume: 0.3 }); updatePills();
+      }
+    }
+  }
+  function updateCritters(dt) {
+    for (const c of critters) {
+      if (!c.alive) continue;
+      const dpx = c.pos.x - player.ctrl.pos.x, dpz = c.pos.z - player.ctrl.pos.z;
+      const dp = Math.hypot(dpx, dpz);
+      c.flee = dp < 11 ? 1 : Math.max(0, c.flee - dt);
+      c.hopT -= dt;
+      if (c.hopT <= 0) {
+        c.hopT = c.flee ? 0.35 : 1.2 + Math.random();
+        let ax, az;
+        if (c.flee) { ax = dpx / (dp || 1); az = dpz / (dp || 1); } else { const a = Math.random() * Math.PI * 2; ax = Math.cos(a); az = Math.sin(a); }
+        const sp = c.flee ? 7 : 2.4; c.vx = ax * sp; c.vz = az * sp; c.vy = 4;
+      }
+      c.vy -= dt * 20; c.y = Math.max(0, c.y + c.vy * dt);
+      c.pos.x = Math.max(-MAP + 4, Math.min(MAP - 4, c.pos.x + c.vx * dt));
+      c.pos.z = Math.max(-MAP + 4, Math.min(MAP - 4, c.pos.z + c.vz * dt));
+      c.vx *= 0.9; c.vz *= 0.9;
+      c.group.position.set(c.pos.x, c.y, c.pos.z);
+      if (Math.abs(c.vx) + Math.abs(c.vz) > 0.1) c.group.rotation.y = Math.atan2(c.vx, c.vz);
+    }
+  }
+
+  // ================= crafting =================
+  let benchLevel = 1, craftOpen = false;
+  const BENCH_UP = { 2: { wood: 5, scrap: 1 }, 3: { wood: 15, scrap: 10 }, 4: { wood: 30, scrap: 20, gem: 2 } };
+  const RECIPES = [
+    { id: 'torch',    name: 'Torch',             lvl: 1, icon: '🔥', cost: { wood: 3 },                     desc: 'Top up your flashlight (+30🔋).', make: () => { player.light = Math.min(lightMax(player), player.light + 30); } },
+    { id: 'bandage',  name: 'Bandage',           lvl: 1, icon: '🩹', cost: { scrap: 2, food: 1 },           desc: 'Heals 35 HP when used (F).', make: () => { player.bandages++; } },
+    { id: 'spear',    name: 'Wooden Spear',      lvl: 1, icon: '🔱', cost: { wood: 5, scrap: 2 },           desc: 'Longer reach & more damage.', once: () => player.hasSpear, make: () => { player.hasSpear = true; ui.system('Crafted a Spear — bigger reach & damage!'); } },
+    { id: 'fuel',     name: 'Fuel Bundle',       lvl: 2, icon: '🪵', cost: { wood: 4 },                     desc: 'Feed the campfire +30% now.', make: () => { if (net && !net.isHost) net.sendTopic('feed', { amt: 30 }); else save.fuel = Math.min(100, save.fuel + 30); } },
+    { id: 'battery',  name: 'Battery',           lvl: 2, icon: '🔋', cost: { scrap: 3 },                    desc: '+1 spare battery (each = +60🔋).', make: () => { player.batteries++; } },
+    { id: 'bed',      name: 'Bed (rest)',        lvl: 2, icon: '🛏️', cost: { wood: 8 },                     desc: 'Sleep to bring on the night.', make: () => sleepToNight() },
+    { id: 'crockpot', name: 'Crock-Pot Meal',    lvl: 3, icon: '🍲', cost: { wood: 2, food: 3 },            desc: 'A hearty meal (+60 hunger, +15 HP).', make: () => { player.hunger = Math.min(100, player.hunger + 60); player.hp = Math.min(100, player.hp + 15); player.char.setHealth(player.hp); ui.setHealth(player.hp, 100); } },
+    { id: 'strong',   name: 'Strong Flashlight', lvl: 3, icon: '🔦', cost: { scrap: 6, battery: 1, gem: 1 }, desc: 'Brighter, longer Deer stun, big battery.', once: () => player.strongLight, make: () => { player.strongLight = true; player.maxLight = 220; player.light = 220; ui.system('✨ Upgraded to a STRONG FLASHLIGHT!'); } },
+  ];
+  function invOf(item) { return ({ wood: player.wood, food: player.food, scrap: player.scrap, gem: player.gem, battery: player.batteries })[item] || 0; }
+  function canAfford(cost) { return Object.entries(cost).every(([k, v]) => invOf(k) >= v); }
+  function payCost(cost) {
+    if (!canAfford(cost)) return false;
+    for (const [k, v] of Object.entries(cost)) {
+      if (k === 'wood') player.wood -= v; else if (k === 'food') player.food -= v;
+      else if (k === 'scrap') player.scrap -= v; else if (k === 'gem') player.gem -= v; else if (k === 'battery') player.batteries -= v;
+    }
+    return true;
+  }
+  const costStr = (cost) => Object.entries(cost).map(([k, v]) => `${v}${LOOT_ICON[k] || ''}`).join(' ');
+  function craft(r) {
+    if (r.once && r.once()) { ui.system(`${r.name} already crafted.`); return; }
+    if (!payCost(r.cost)) { sfx.play('error'); ui.system(`Not enough materials for ${r.name} (${costStr(r.cost)}).`); return; }
+    r.make(); sfx.play('cash', { volume: 0.5 });
+    updatePills(); refreshBoard(); renderCraftPanel();
+  }
+  function upgradeBench() {
+    const next = benchLevel + 1, cost = BENCH_UP[next];
+    if (!cost) { ui.system('The bench is fully upgraded!'); return; }
+    if (!payCost(cost)) { sfx.play('error'); ui.system(`Bench Lv${next} needs ${costStr(cost)}.`); return; }
+    benchLevel = next; sfx.play('cash', { volume: 0.6 }); ui.system(`🔨 Crafting Bench upgraded to Level ${benchLevel}!`);
+    updatePills(); renderCraftPanel();
+  }
+  function sleepToNight() {
+    if (save.phase !== 'day') { ui.system('You can only rest during the day.'); return; }
+    if (net && !net.isHost) { ui.system('Only the host can rest the whole camp.'); return; }
+    closeCraft(); ui.system('You rest by the fire… night falls.'); save.clock = DAY_LEN - 0.6;
+  }
+  // ---- crafting panel (DOM overlay) ----
+  const craftEl = document.createElement('div');
+  craftEl.className = 'craft-panel hud-clickable'; craftEl.hidden = true;
+  craftEl.innerHTML = `
+    <div class="craft-head"><span>🔨 Crafting Bench <b>Lv <span class="cb-lvl"></span>/4</b></span><button class="craft-x">✕</button></div>
+    <div class="craft-inv"></div>
+    <div class="craft-list"></div>
+    <button class="craft-up"></button>`;
+  ui.hud.appendChild(craftEl);
+  craftEl.querySelector('.craft-x').addEventListener('click', () => closeCraft());
+  craftEl.querySelector('.craft-up').addEventListener('click', () => upgradeBench());
+  function renderCraftPanel() {
+    if (craftEl.hidden) return;
+    craftEl.querySelector('.cb-lvl').textContent = benchLevel;
+    craftEl.querySelector('.craft-inv').innerHTML =
+      [['wood', player.wood], ['food', player.food], ['scrap', player.scrap], ['battery', player.batteries], ['gem', player.gem], ['bandage', player.bandages]]
+        .map(([k, v]) => `<span class="ci">${LOOT_ICON[k]} ${v}</span>`).join('');
+    const list = craftEl.querySelector('.craft-list');
+    list.innerHTML = '';
+    for (const r of RECIPES) {
+      const locked = r.lvl > benchLevel;
+      const done = r.once && r.once();
+      const afford = canAfford(r.cost);
+      const row = document.createElement('div');
+      row.className = 'craft-row' + (locked ? ' locked' : '');
+      row.innerHTML = `<span class="cr-ic">${r.icon}</span>
+        <span class="cr-mid"><b>${r.name}</b><small>${locked ? `Unlocks at bench Lv ${r.lvl}` : r.desc}</small></span>
+        <button class="cr-btn">${done ? '✓' : locked ? '🔒' : costStr(r.cost)}</button>`;
+      const btn = row.querySelector('.cr-btn');
+      btn.disabled = locked || done || !afford;
+      if (!locked && !done) btn.addEventListener('click', () => craft(r));
+      list.appendChild(row);
+    }
+    const up = craftEl.querySelector('.craft-up');
+    const next = benchLevel + 1, upCost = BENCH_UP[next];
+    if (!upCost) { up.textContent = '★ Bench fully upgraded'; up.disabled = true; }
+    else { up.textContent = `⬆ Upgrade Bench → Lv${next}  (${costStr(upCost)})`; up.disabled = !canAfford(upCost); }
+  }
+  function openCraft() { craftOpen = true; busy = true; craftEl.hidden = false; renderCraftPanel(); sfx.play('click'); }
+  function closeCraft() { craftOpen = false; busy = false; craftEl.hidden = true; }
+  prompts.push(ui.addPrompt({
+    getPos: () => benchPos.clone().add(new THREE.Vector3(0, 2.2, 0)),
+    text: '🔨 Craft', key: 'E', radius: 5, hold: 0,
+    filter: () => !craftOpen && !busy,
+    onTrigger: () => openCraft(),
+  }));
+
   // ================= combat =================
   function swingAxe() {
     if (busy || player.swingCd > 0 || !player.alive) return;
-    player.swingCd = 0.55;
+    player.swingCd = player.hasSpear ? 0.5 : 0.55;
     player.char.playAction('slash', 0.4);
     sfx.play('whoosh', { volume: 0.4 });
+    // hunt the bunnies too — quick meat
+    huntCritters();
     // face camera-forward-ish: use player facing
     const fwd = new THREE.Vector3(Math.sin(player.char.group.rotation.y), 0, Math.cos(player.char.group.rotation.y));
+    const reach = player.hasSpear ? 6.8 : 5.5;
+    const dmg = player.hasSpear ? 26 + Math.random() * 8 : 16 + Math.random() * 6;
     const list = (net && !net.isHost) ? [...proxies.values()] : wolves;
     for (const w of list) {
       if (w.alive === false) continue;
       const wp = w.ctrl ? w.ctrl.pos : w.group.position;
       const dx = wp.x - player.ctrl.pos.x, dz = wp.z - player.ctrl.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > 5.5) continue;
+      if (d > reach) continue;
       const dot = (dx / (d || 1)) * fwd.x + (dz / (d || 1)) * fwd.z;
       if (dot < 0.2 && d > 2.2) continue;
-      hitWolf(player, w, 16 + Math.random() * 6);
+      hitWolf(player, w, dmg);
     }
   }
   function hitWolf(h, w, dmg) {
+    // THE DEER (and anything invulnerable) cannot be harmed — only turned away.
+    if (w.type?.invuln) {
+      if (h?.isPlayer) {
+        const wp = w.ctrl ? w.ctrl.pos : w.group.position;
+        ui.popup(camera, wp.clone().add(new THREE.Vector3(0, 8, 0)), '🛡 IMMUNE', '#cdd2da', 15);
+        sfx.play('error', { volume: 0.3 });
+      }
+      return;
+    }
     if (w.proxy) {
       // client: tell host, optimistic feedback
       net?.sendTopic('whit', { id: w.nid, dmg });
@@ -681,6 +1168,15 @@ export default async function launch({ root, user, game }) {
     } else {
       ui.announce(`NIGHT ${save.night}`, 'They\'re coming — keep the fire lit!', 3);
     }
+    // THE DEER hunts every night from Night 2 on (and rages on blood moons).
+    if (save.night >= 2) {
+      setTimeout(() => {
+        if (save.phase !== 'night' || gameOver) return;
+        spawnDeer(boss || save.night >= 12);
+        ui.announce('...something is watching', 'The Deer is awake. Shine your flashlight to turn it away.', 4);
+        sfx.play('awaken', { volume: 0.4 });
+      }, boss ? 6000 : 9000);
+    }
     humans.filter((h) => h.chat && !h.benched).forEach((h, i) => chatter.botSay(h.chat, 'wave', { wave: save.night }, 0.5, 0.8 + i));
     updatePills();
   }
@@ -688,9 +1184,10 @@ export default async function launch({ root, user, game }) {
     const survived = save.night;
     save.phase = 'day'; save.clock = 0;
     setBloodMoon(false);
-    // clear leftover mobs at dawn
+    // clear leftover mobs at dawn (the Deer flees the light)
     for (const w of wolves) { if (w.alive) { w.alive = false; scene.remove(w.group); } }
     wolves.length = 0;
+    deer = null;
     reviveAll();
     if (survived >= WIN_NIGHT) { endGame(true); return; }
     if (survived > 0) {
@@ -799,6 +1296,7 @@ export default async function launch({ root, user, game }) {
     },
     topics: {
       feed: (d) => { if (net?.isHost && d) save.fuel = Math.min(100, save.fuel + (d.amt || 12)); },
+      dstun: (d) => { if (net?.isHost && d && deer && deer.alive) applyDeerStun(deer, d.dur || 1.4); },
       whit: (d) => { if (!net?.isHost || !d) return; const w = wolves.find((x) => x.nid === d.id && x.alive); if (w) hitWolf({ isPlayer: false, peerId: d._from }, w, d.dmg || 10); },
       wdeath: (d) => {
         if (!d) return;
@@ -818,29 +1316,110 @@ export default async function launch({ root, user, game }) {
   });
 
   // ================= input =================
-  const attack = () => swingAxe();
+  const attack = () => { if (!craftOpen) swingAxe(); };
   input.onMouseDown(() => { if (!ui.menuOpen) attack(); });
   if (input.isTouch) input.setFireButton(() => attack());
   function eat() {
-    if (player.food <= 0) { ui.system('No food! Pick berries first.'); return; }
+    if (player.food <= 0) { ui.system('No food! Pick berries or hunt bunnies.'); return; }
     player.food--; player.hunger = Math.min(100, player.hunger + 25);
     player.hp = Math.min(100, player.hp + 8);
     player.char.playAction('eat', 1.2);
     sfx.play('eat'); ui.setHealth(player.hp, 100); updatePills(); refreshBoard();
   }
+  function useBandage() {
+    if (player.bandages <= 0) { ui.system('No bandages — craft them at the bench.'); return; }
+    player.bandages--; player.hp = Math.min(100, player.hp + 35);
+    player.char.setHealth(player.hp); sfx.play('medkit'); ui.setHealth(player.hp, 100);
+    ui.system('🩹 Patched up (+35 HP).'); updatePills();
+  }
   input.registerAction({ id: 'eat', label: 'Eat', icon: '🍖', key: 'f', onDown: eat });
+  input.registerAction({ id: 'light', label: 'Flashlight', icon: '🔦', key: 'q', color: '#ffe08a', onDown: () => toggleLight() });
+  input.registerAction({ id: 'bandage', label: 'Bandage', icon: '🩹', key: 'r', color: '#f78fa0', onDown: () => useBandage() });
   if (!input.isTouch) {
     ui.hotbarSlot('LMB', '🪓', 'Swing', 'swing');
     ui.hotbarSlot('E', '✋', 'Gather', 'gather');
+    ui.hotbarSlot('Q', '🔦', 'Light', 'light');
     ui.hotbarSlot('F', '🍖', 'Eat', 'eat');
+    ui.hotbarSlot('R', '🩹', 'Heal', 'bandage');
   }
+  // close the crafting panel on Escape (before the pause menu opens)
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && craftOpen) { e.stopImmediatePropagation(); closeCraft(); } }, true);
   app.onChatSend((t) => { chatter.onPlayerMessage(t); net?.sendChat(t); });
 
   setTimeout(() => humans.filter((h) => h.chat).forEach((h, i) => chatter.botSay(h.chat, 'spawn', {}, 0.7, 0.5 + i * 1.3)), 1000);
 
   // ================= monster AI (host) =================
+  // THE DEER's stalk: won't enter the lit campfire ring, ramps speed the longer
+  // it chases, freezes when the flashlight catches it, and rages when hungry.
+  function deerThink(w, dt, t) {
+    const T = w.type;
+    // stunned by a flashlight beam — recoil and hold
+    if (w.stunT > 0) {
+      w.stunT -= dt;
+      w.ctrl.moveDir.set(0, 0, 0);
+      w.group.rotation.x = -0.25 + Math.sin(t * 30) * 0.05; // flinch
+      for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#7a1410' : '#5a5a20');
+      return;
+    }
+    w.group.rotation.x = 0;
+    for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#ff2a20' : '#eaff6a');
+    w.stunResist = Math.max(0, w.stunResist - dt * 0.35); // resistance fades over time
+    // retarget the nearest survivor
+    w.retargetT -= dt;
+    if (!w.target || !w.target.alive || w.retargetT <= 0) {
+      w.retargetT = 1.2 + Math.random();
+      let best = null, bd = Infinity;
+      for (const tg of wolfTargets()) { const d = distXZ(w.ctrl.pos, tg.ctrl.pos); if (d < bd) { bd = d; best = tg; } }
+      w.target = best;
+    }
+    const fuel = save.fuel, fireR = 7 + fuel / 100 * 12;
+    const tgt = w.target;
+    const goal = tgt ? tgt.ctrl.pos : player.ctrl.pos;
+    const targetSafe = tgt && distXZ(tgt.ctrl.pos, FIRE) < fireR && fuel > 8;
+    if (targetSafe) {
+      // it will NOT enter the firelight — prowl the treeline edge of the ring
+      w.chaseT = Math.max(0, w.chaseT - dt);
+      const ang = Math.atan2(w.ctrl.pos.z - FIRE.z, w.ctrl.pos.x - FIRE.x) + dt * 0.5;
+      const rr = fireR + 4;
+      const rx = FIRE.x + Math.cos(ang) * rr, rz = FIRE.z + Math.sin(ang) * rr;
+      w.ctrl.moveDir.set(rx - w.ctrl.pos.x, 0, rz - w.ctrl.pos.z).normalize();
+      w.group.rotation.y = Math.atan2(FIRE.x - w.ctrl.pos.x, FIRE.z - w.ctrl.pos.z);
+      w.ctrl.speed = T.speed * 0.7;
+      return;
+    }
+    // hunt: the longer the chase, the faster it comes (Roblox behavior)
+    w.chaseT += dt;
+    const ramp = 1 + Math.min(w.chaseT * 0.05, w.hungry ? 1.1 : 0.75);
+    w.ctrl.speed = (T.speed * (w.hungry ? 1.2 : 1) + save.night * 0.1) * ramp;
+    const d = distXZ(w.ctrl.pos, goal);
+    if (d > T.reach) {
+      const dx = (goal.x - w.ctrl.pos.x) / d, dz = (goal.z - w.ctrl.pos.z) / d;
+      w.ctrl.moveDir.set(dx, 0, dz);
+      w.group.rotation.y = Math.atan2(dx, dz);
+      if (w.ctrl.grounded && Math.hypot(w.ctrl.vel.x, w.ctrl.vel.z) < w.ctrl.speed * 0.3) w.ctrl.wantJump = true;
+    } else {
+      w.ctrl.moveDir.set(0, 0, 0);
+      if (tgt) {
+        w.group.rotation.y = Math.atan2(tgt.ctrl.pos.x - w.ctrl.pos.x, tgt.ctrl.pos.z - w.ctrl.pos.z);
+        w.attackT -= dt;
+        if (w.attackT <= 0) {
+          w.attackT = w.hungry ? 0.9 : 1.3;
+          const dmg = T.dmg * (w.hungry ? 1.3 : 1);
+          app.burst(w.ctrl.pos.clone().add(new THREE.Vector3(0, 6, 0)), { color: '#8a1a14', count: 8, speed: 12, size: 0.3, life: 0.35 });
+          sfx.play('growl', { volume: 0.5 });
+          setTimeout(() => {
+            if (!w.alive || !tgt.alive || distXZ(w.ctrl.pos, tgt.ctrl.pos) >= T.reach + 1) return;
+            if (tgt.remote) net?.sendTopic('watk', { to: tgt.peerId, dmg });
+            else hurtHuman(tgt, dmg);
+          }, 220);
+        }
+      }
+    }
+  }
+
   function mobThink(w, dt, t) {
     if (!w.alive) return;
+    if (w.deer) return deerThink(w, dt, t);
     const T = w.type;
     w.retargetT -= dt;
     if (!w.target || !w.target.alive || w.retargetT <= 0) {
@@ -923,10 +1502,10 @@ export default async function launch({ root, user, game }) {
     if (h.swingCd > 0) h.swingCd -= dt;
     const night = save.phase === 'night';
     if (night && (wolves.length || proxies.size)) {
-      // fight nearest wolf
+      // fight nearest wolf — but never the Deer (it can't be hurt; don't die on it)
       const list = wolves.length ? wolves : [...proxies.values()];
       let best = null, bd = Infinity;
-      for (const w of list) { if (w.alive === false) continue; const wp = w.ctrl ? w.ctrl.pos : w.group.position; const d = distXZ(h.ctrl.pos, wp); if (d < bd) { bd = d; best = w; } }
+      for (const w of list) { if (w.alive === false || w.type?.invuln) continue; const wp = w.ctrl ? w.ctrl.pos : w.group.position; const d = distXZ(h.ctrl.pos, wp); if (d < bd) { bd = d; best = w; } }
       if (best) {
         const wp = best.ctrl ? best.ctrl.pos : best.group.position;
         if (bd > 4) h.bot.seek(wp, { strafe: 0.2 });
@@ -1043,11 +1622,18 @@ export default async function launch({ root, user, game }) {
       if (h.bot) h.bot.syncVisual(dt);
     }
 
+    // ---- flashlight + wildlife + chest guards ----
+    updateFlashlight(dt);
+    updateCritters(dt);
+    if (!net || net.isHost) checkChestGuards();
+    // radio-tower beacon blink
+    for (const rt of radioTowers) { const on = (Math.sin(t * 2.2) > 0); rt.userData.beacon.visible = on; rt.userData.beaconLight.intensity = on ? 6 : 0; }
+
     // ---- monsters (host) ----
     if (!net || net.isHost) {
       for (let i = wolves.length - 1; i >= 0; i--) {
         const w = wolves[i];
-        if (!w.alive) { wolves.splice(i, 1); continue; }
+        if (!w.alive) { if (w.deer) deer = null; wolves.splice(i, 1); continue; }
         mobThink(w, dt, t);
         w.ctrl.update(dt, world);
         w.ctrl.pos.x = Math.max(-HB + 2, Math.min(HB - 2, w.ctrl.pos.x));
@@ -1085,7 +1671,11 @@ export default async function launch({ root, user, game }) {
   if (typeof window !== 'undefined') {
     window.__bvNight = {
       get save() { return save; }, get wolves() { return wolves; },
-      get player() { return player; }, startNight, startDay, spawnMob,
+      get player() { return player; }, get deer() { return deer; }, get chests() { return chests; },
+      get critters() { return critters; }, get benchLevel() { return benchLevel; },
+      startNight, startDay, spawnMob, spawnDeer, toggleLight, openCraft, closeCraft, craft, upgradeBench,
+      get recipes() { return RECIPES; }, applyDeerStun,
+      grant: (k, n) => grantLoot(k, n),
     };
   }
 

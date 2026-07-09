@@ -289,3 +289,55 @@ body.playing { position: fixed; inset: 0; width: 100%; touch-action: none; overs
   .bottom-hud { width: 60vw; left: 38%; }
   .healthbar { height: 14px; }
 }
+
+/* ---------------- crafting panel (99 Nights) ---------------- */
+.craft-panel[hidden] { display: none; }
+.craft-panel {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(420px, 92vw); max-height: 82vh; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(28,22,16,0.97), rgba(18,15,12,0.97));
+  border: 2px solid #6a4f30; border-radius: 14px; z-index: 70; pointer-events: auto;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.6); color: #f0e6d6; overflow: hidden;
+  font-family: system-ui, Arial, sans-serif;
+}
+.craft-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; background: rgba(0,0,0,0.3); font-weight: 800; font-size: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.craft-head b { color: #ffcf6b; font-weight: 800; }
+.craft-x {
+  width: 30px; height: 30px; border-radius: 8px; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 15px; line-height: 1;
+}
+.craft-x:active { background: rgba(255,255,255,0.25); }
+.craft-inv {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.15);
+}
+.craft-inv .ci {
+  background: rgba(255,255,255,0.08); border-radius: 20px; padding: 3px 10px;
+  font-size: 13px; font-weight: 700;
+}
+.craft-list { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.craft-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+}
+.craft-row.locked { opacity: 0.45; }
+.craft-row .cr-ic { font-size: 22px; width: 30px; text-align: center; }
+.craft-row .cr-mid { flex: 1; display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.craft-row .cr-mid b { font-size: 14px; }
+.craft-row .cr-mid small { color: #b6ab98; font-size: 11.5px; }
+.craft-row .cr-btn {
+  border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 800;
+  font-size: 13px; background: #3f8a3c; color: #fff; white-space: nowrap; min-width: 54px;
+}
+.craft-row .cr-btn:disabled { background: #4a4741; color: #8f8a80; cursor: default; }
+.craft-row .cr-btn:not(:disabled):active { background: #47a043; }
+.craft-up {
+  margin: 8px; padding: 11px; border: none; border-radius: 10px; cursor: pointer;
+  font-weight: 800; font-size: 14px; background: #b5842f; color: #241a08;
+}
+.craft-up:disabled { background: #4a4741; color: #8f8a80; cursor: default; }
+.craft-up:not(:disabled):active { background: #d29b39; }
