@@ -188,7 +188,7 @@ Every 5 waves the horde gets faster. Good luck.`,
 
 The forest is safe by day — but when the sun goes down, something wakes in the trees. Keep the campfire burning, craft your gear, and never let your flashlight die. How many nights can you last?
 
-🦌 THE DEER — one towering, unkillable stalker hunts you every night. You can't fight it. Only your FLASHLIGHT turns it away — and it learns to shrug off the beam the more you lean on it. Keep that battery charged.
+🦌 THE DEER — one towering, unkillable stalker roams the woods each night. Stray too far from camp or let the campfire die and it hunts you down. You can't fight it — only your FLASHLIGHT turns it away, and it learns to shrug off the beam the more you lean on it. Keep that battery charged.
 🔦 Flashlight & batteries — recharge at the fire, loot spares from chests, craft a Strong Flashlight for a brighter, longer stun
 🔨 Crafting bench — upgrade it Lv 1→4 and craft spears, bandages, crock-pot meals, batteries, beds and more from wood, scrap & gems
 🧰 Loot chests (Common → Diamond) hidden in cabins, radio towers, ruins & a spider cave — some guarded by a beast

@@ -109,107 +109,212 @@ function buildBear() {
   return g;
 }
 
-// The boss: a towering mossy Forest Giant with real telegraphed smashes.
+// The boss: a towering bark-and-moss Forest Giant — a walking tree-troll with
+// glowing amber cracks, a mossy mane, jagged wooden horns and real telegraphed
+// smashes.
 function buildGiant() {
   const g = new THREE.Group();
-  const moss = new THREE.MeshLambertMaterial({ color: '#3c5738' });
+  const moss = new THREE.MeshLambertMaterial({ color: '#41613a' });
+  const mossD = new THREE.MeshLambertMaterial({ color: '#2c4327' });
   const bark = new THREE.MeshLambertMaterial({ color: '#4f3a20' });
-  const dark = new THREE.MeshLambertMaterial({ color: '#26301f' });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(4.6, 5.6, 3.2), moss);
+  const barkD = new THREE.MeshLambertMaterial({ color: '#33240f' });
+  const dark = new THREE.MeshLambertMaterial({ color: '#20281a' });
+  const glow = new THREE.MeshBasicMaterial({ color: '#ff8a1e' });   // molten cracks
+  // ---- craggy bark torso with a mossy back and glowing chest seam ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(4.8, 5.6, 3.4), bark);
   torso.position.y = 9.0; torso.castShadow = true; g.add(torso);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.0, 2.9), bark);
-  belly.position.y = 7.0; g.add(belly);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.8, 2.8), moss);
-  head.position.y = 13.2; g.add(head);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 2.2), dark);
-  jaw.position.set(0, 12.1, 0.5); g.add(jaw);
-  for (const sx of [-0.75, 0.75]) {
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.2), glowEye('#ff2020'));
-    eye.position.set(sx, 13.5, 1.45); g.add(eye);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(4.6, 5.2, 1.2), moss);
+  back.position.set(0, 9.3, -1.5); g.add(back);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.2, 3.0), barkD);
+  belly.position.y = 6.9; g.add(belly);
+  // glowing seam of embers down the chest
+  for (const [ey, es] of [[10.4, 1.4], [9.0, 1.9], [7.6, 1.2]]) {
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.5, es, 0.3), glow);
+    seam.position.set(0, ey, 1.75); g.add(seam);
   }
-  for (const sx of [-1.1, 1.1]) {
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.38, 2.8, 5), bark);
-    horn.position.set(sx, 15.2, 0); horn.rotation.z = sx > 0 ? -0.45 : 0.45; g.add(horn);
+  const emberLight = new THREE.PointLight(0xff7a1e, 6, 22, 1.6); emberLight.position.set(0, 9, 2.2); g.add(emberLight);
+  // shoulder moss pauldrons
+  for (const sx of [-1, 1]) {
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 3.2), moss);
+    pad.position.set(sx * 2.4, 11.5, 0); pad.castShadow = true; g.add(pad);
+    // little bushes/branches sprouting
+    const twig = new THREE.Mesh(new THREE.SphereGeometry(1.0, 7, 6), mossD);
+    twig.position.set(sx * 2.8, 12.4, -0.3); g.add(twig);
   }
+  // ---- head: heavy bark brow, mossy crown, jagged wooden horns ----
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 1.8), barkD);
+  neck.position.y = 12.1; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.9, 3.0), bark);
+  head.position.y = 13.5; head.castShadow = true; g.add(head);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(3.3, 1.0, 3.1), moss);
+  crown.position.y = 15.0; g.add(crown);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.7, 0.6), barkD);
+  brow.position.set(0, 14.0, 1.45); g.add(brow);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 2.4), dark);
+  jaw.position.set(0, 12.5, 0.5); g.add(jaw);
+  // teeth
+  for (const tx of [-0.8, -0.3, 0.3, 0.8]) {
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 4), new THREE.MeshLambertMaterial({ color: '#d8cdae' }));
+    tooth.position.set(tx, 12.9, 1.5); g.add(tooth);
+  }
+  // deep-set glowing eyes
+  for (const sx of [-0.8, 0.8]) {
+    const socket = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.3), dark);
+    socket.position.set(sx, 13.6, 1.5); g.add(socket);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), glowEye('#ffcf3a'));
+    eye.position.set(sx, 13.6, 1.62); g.add(eye);
+  }
+  // jagged wooden horns/branches
+  for (const sx of [-1, 1]) {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.42, 3.2, 5), bark);
+    horn.position.set(sx * 1.2, 16.0, 0); horn.rotation.z = sx * -0.5; horn.castShadow = true; g.add(horn);
+    const branch = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1.5, 4), bark);
+    branch.position.set(sx * 1.9, 16.6, 0.2); branch.rotation.z = sx * -1.0; g.add(branch);
+  }
+  // ---- huge arms with knotted fists ----
   const arms = [];
   for (const side of [-1, 1]) {
     const sh = new THREE.Group();
-    sh.position.set(side * 2.9, 11.2, 0); g.add(sh);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5.2, 1.5), moss);
-    arm.position.y = -2.4; arm.castShadow = true; sh.add(arm);
-    const fist = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.8, 2.0), bark);
-    fist.position.y = -5.1; sh.add(fist);
+    sh.position.set(side * 3.0, 11.4, 0); g.add(sh);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(1.7, 3.0, 1.7), bark);
+    upper.position.y = -1.5; upper.castShadow = true; sh.add(upper);
+    const fore = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), moss);
+    fore.position.y = -4.2; sh.add(fore);
+    const fist = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 2.4), barkD);
+    fist.position.y = -6.0; fist.castShadow = true; sh.add(fist);
+    // knuckle rocks
+    for (const kx of [-0.6, 0, 0.6]) {
+      const k = new THREE.Mesh(new THREE.DodecahedronGeometry(0.42), dark);
+      k.position.set(kx, -6.4, 1.0); sh.add(k);
+    }
     arms.push({ sh, side });
   }
+  // ---- thick legs with mossy knees ----
   const legs = [];
-  for (const [lx, ph] of [[-1.3, 0], [1.3, Math.PI]]) {
+  for (const [lx, ph] of [[-1.4, 0], [1.4, Math.PI]]) {
     const hip = new THREE.Group();
     hip.position.set(lx, 6.2, 0); g.add(hip);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(1.7, 6.4, 1.7), moss);
-    leg.position.y = -3.2; leg.castShadow = true; hip.add(leg);
+    const thigh = new THREE.Mesh(new THREE.BoxGeometry(1.9, 3.6, 1.9), bark);
+    thigh.position.y = -1.7; thigh.castShadow = true; hip.add(thigh);
+    const knee = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), moss);
+    knee.position.y = -3.6; hip.add(knee);
+    const shin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.0, 1.7), barkD);
+    shin.position.set(0, -4.9, 0.1); hip.add(shin);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.0, 3.0), dark);
+    foot.position.set(0, -6.3, 0.7); hip.add(foot);
     legs.push({ hip, ph });
   }
   g.userData.legs = legs; g.userData.arms = arms; g.userData.giant = true;
   return g;
 }
 
-// THE DEER — the marquee horror. A gaunt, too-tall humanoid stag with a bleached
-// skull for a face and antlers scraping the fog. Cannot be killed; only a
-// flashlight beam turns it away. Its eyes burn brighter (red) when it hungers.
+// THE DEER — the marquee horror, styled after the classic mutant stag: a
+// hulking brown-furred humanoid with a deer skull-face, huge pale round eyes,
+// pink-lined ears, black branching antlers, an open maw and long clawed arms.
+// Cannot be killed; only a flashlight beam turns it away. Eyes flare red when
+// it hungers.
 function buildDeer() {
   const g = new THREE.Group();
-  const hide = new THREE.MeshLambertMaterial({ color: '#20242a' });
-  const skin = new THREE.MeshLambertMaterial({ color: '#2b2f36' });
-  const bone = new THREE.MeshLambertMaterial({ color: '#d8d2c2' });
-  // long spindly torso, hunched forward
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.4, 1.1), hide);
-  torso.position.y = 6.4; torso.rotation.x = 0.16; torso.castShadow = true; g.add(torso);
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.4, 1.3), hide);
-  chest.position.set(0, 7.9, 0.15); g.add(chest);
-  const ribs = new THREE.Mesh(new THREE.BoxGeometry(1.55, 1.6, 1.15), skin);
-  ribs.position.set(0, 5.5, 0.05); g.add(ribs);
-  // neck + elongated deer skull
-  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.6), skin);
-  neck.position.set(0, 8.9, 0.5); neck.rotation.x = -0.35; g.add(neck);
-  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.95, 1.9), bone);
-  skull.position.set(0, 9.7, 1.15); skull.castShadow = true; g.add(skull);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.55, 0.9), bone);
-  snout.position.set(0, 9.5, 2.1); g.add(snout);
-  // glowing eyes (recolored to red when hungry via userData.eyes)
+  const fur = new THREE.MeshLambertMaterial({ color: '#5a3d24' });        // body brown
+  const furD = new THREE.MeshLambertMaterial({ color: '#3a2716' });       // shaded fur
+  const limb = new THREE.MeshLambertMaterial({ color: '#241611' });       // near-black arms/claws
+  const faceMat = new THREE.MeshLambertMaterial({ color: '#6b4a2d' });    // face
+  const muzzle = new THREE.MeshLambertMaterial({ color: '#8f6a45' });     // lighter snout
+  const maw = new THREE.MeshBasicMaterial({ color: '#0a0605' });          // dark open mouth
+  const pink = new THREE.MeshLambertMaterial({ color: '#c77f86' });       // inner ear
+  const black = new THREE.MeshLambertMaterial({ color: '#141210' });      // antlers
+  const pupilMat = new THREE.MeshBasicMaterial({ color: '#100c0a' });
+
+  // ---- torso: broad, shaggy, slightly hunched ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.0, 1.5), fur);
+  torso.position.set(0, 6.3, 0); torso.rotation.x = 0.12; torso.castShadow = true; g.add(torso);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.7, 1.7), fur);
+  chest.position.set(0, 7.7, 0.1); chest.castShadow = true; g.add(chest);
+  const hips = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.4, 1.4), furD);
+  hips.position.set(0, 4.9, 0); g.add(hips);
+  // shaggy fur tufts around shoulders/chest
+  for (const [sx, sy, sz, r] of [[-1.2, 7.3, 0.5, 0.5], [1.2, 7.3, 0.5, -0.5], [-1.0, 6.2, 0.7, 0.3], [1.0, 6.2, 0.7, -0.3], [0, 5.4, 0.8, 0]]) {
+    const tuft = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.0, 0.5), furD);
+    tuft.position.set(sx, sy, sz); tuft.rotation.z = r; tuft.rotation.x = 0.3; g.add(tuft);
+  }
+
+  // ---- head ----
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.9), furD);
+  neck.position.set(0, 8.7, 0.25); g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.7, 1.7), faceMat);
+  head.position.set(0, 9.7, 0.35); head.castShadow = true; g.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.5, 1.2), faceMat);
+  brow.position.set(0, 10.35, 0.6); g.add(brow);
+  // elongated muzzle
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.95, 1.5), muzzle);
+  snout.position.set(0, 9.4, 1.45); snout.castShadow = true; g.add(snout);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.4), limb);
+  nose.position.set(0, 9.6, 2.2); g.add(nose);
+  // open maw (hanging dark jaw)
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.9, 1.1), maw);
+  mouth.position.set(0, 8.75, 1.35); g.add(mouth);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 1.2), muzzle);
+  jaw.position.set(0, 8.35, 1.4); g.add(jaw);
+
+  // ---- big pale round eyes with dark pupils (the signature) ----
   const eyes = [];
-  for (const sx of [-0.28, 0.28]) {
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.14), glowEye('#eaff6a'));
-    eye.position.set(sx, 9.85, 1.95); g.add(eye); eyes.push(eye);
+  for (const sx of [-0.62, 0.62]) {
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.52, 14, 12), glowEye('#efe9dc'));
+    white.position.set(sx, 9.95, 1.15); white.scale.set(1, 1, 0.55); g.add(white); eyes.push(white);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), pupilMat);
+    pupil.position.set(sx, 9.95, 1.5); g.add(pupil);
   }
   g.userData.eyes = eyes;
-  // branching antlers
-  const antlerMat = new THREE.MeshLambertMaterial({ color: '#b6ac93' });
+
+  // ---- pink-lined deer ears, angled out ----
   for (const side of [-1, 1]) {
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 2.2, 5), antlerMat);
-    base.position.set(side * 0.35, 10.9, 1.0); base.rotation.z = side * 0.5; base.rotation.x = -0.3; g.add(base);
-    for (const [ty, tz, tl, tr] of [[11.7, 1.4, 1.1, 0.6], [12.2, 0.6, 1.0, -0.5], [11.2, 1.9, 0.9, 0.9]]) {
-      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, tl, 4), antlerMat);
-      tine.position.set(side * (0.9 + Math.abs(tz - 1) * 0.2), ty, tz); tine.rotation.z = side * tr; g.add(tine);
+    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.0, 0.55), faceMat);
+    ear.position.set(side * 1.15, 10.2, 0.1); ear.rotation.z = side * 0.7; ear.rotation.x = -0.2; g.add(ear);
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.7, 0.32), pink);
+    inner.position.set(side * 1.28, 10.2, 0.22); inner.rotation.z = side * 0.7; g.add(inner);
+  }
+
+  // ---- black branching antlers ----
+  for (const side of [-1, 1]) {
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 3.2, 6), black);
+    beam.position.set(side * 0.55, 11.6, 0.1); beam.rotation.z = side * 0.42; beam.rotation.x = -0.25; beam.castShadow = true; g.add(beam);
+    for (const [ty, txo, tzo, tl, tr, tx2] of [
+      [11.9, 1.2, 0.9, 1.5, 0.7, 0.3], [12.7, 1.5, 0.4, 1.4, 0.5, 0.6],
+      [12.9, 1.0, 1.2, 1.2, 1.0, 0.2], [13.4, 1.3, 0.7, 1.3, 0.45, 0.5]]) {
+      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.13, tl, 5), black);
+      tine.position.set(side * (txo + tx2 * 0.3), ty, tzo); tine.rotation.z = side * tr; tine.rotation.x = -0.3; g.add(tine);
     }
   }
-  // long forelimbs (arms) that hang, and digitigrade back legs
+
+  // ---- long hanging arms ending in big claws ----
   const arms = [];
   for (const side of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(side * 0.95, 8.0, 0.2); g.add(sh);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 3.6, 0.42), skin);
-    arm.position.y = -1.7; arm.castShadow = true; sh.add(arm);
-    const claw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.5), hide);
-    claw.position.y = -3.7; sh.add(claw);
+    const sh = new THREE.Group(); sh.position.set(side * 1.35, 8.1, 0.1); g.add(sh);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 0.6), limb);
+    upper.position.y = -1.15; upper.castShadow = true; sh.add(upper);
+    const fore = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.4, 0.5), limb);
+    fore.position.set(side * 0.15, -3.4, 0.1); sh.add(fore);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), limb);
+    hand.position.set(side * 0.2, -4.7, 0.15); sh.add(hand);
+    // splayed claws
+    for (const cx of [-0.18, 0, 0.18]) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.9, 4), limb);
+      claw.position.set(side * 0.2 + cx, -5.25, 0.25); claw.rotation.x = 0.5; sh.add(claw);
+    }
     arms.push({ sh, side });
   }
   g.userData.arms = arms;
+
+  // ---- digitigrade brown legs ----
   const legs = [];
-  for (const [lx, ph] of [[-0.55, 0], [0.55, Math.PI]]) {
-    const hip = new THREE.Group(); hip.position.set(lx, 4.7, 0); g.add(hip);
-    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), hide);
-    thigh.position.y = -1.3; thigh.castShadow = true; hip.add(thigh);
-    const shin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2.4, 0.4), skin);
-    shin.position.set(0, -3.3, 0.25); hip.add(shin);
+  for (const [lx, ph] of [[-0.7, 0], [0.7, Math.PI]]) {
+    const hip = new THREE.Group(); hip.position.set(lx, 4.6, 0); g.add(hip);
+    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 2.6, 0.9), fur);
+    thigh.position.y = -1.2; thigh.castShadow = true; hip.add(thigh);
+    const shin = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.4, 0.6), furD);
+    shin.position.set(0, -3.2, 0.3); hip.add(shin);
+    const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.6, 1.1), limb);
+    hoof.position.set(0, -4.4, 0.55); hip.add(hoof);
     legs.push({ hip, ph });
   }
   g.userData.legs = legs; g.userData.deer = true;
@@ -997,22 +1102,51 @@ export default async function launch({ root, user, game }) {
     closeCraft(); ui.system('You rest by the fire… night falls.'); save.clock = DAY_LEN - 0.6;
   }
   // ---- crafting panel (DOM overlay) ----
-  const craftEl = document.createElement('div');
-  craftEl.className = 'craft-panel hud-clickable'; craftEl.hidden = true;
-  craftEl.innerHTML = `
-    <div class="craft-head"><span>🔨 Crafting Bench <b>Lv <span class="cb-lvl"></span>/4</b></span><button class="craft-x">✕</button></div>
-    <div class="craft-inv"></div>
-    <div class="craft-list"></div>
-    <button class="craft-up"></button>`;
-  ui.hud.appendChild(craftEl);
-  craftEl.querySelector('.craft-x').addEventListener('click', () => closeCraft());
-  craftEl.querySelector('.craft-up').addEventListener('click', () => upgradeBench());
+  // Full-screen flex backdrop guarantees the panel is CENTERED on every device
+  // (no fragile absolute-position math) and gives a big tap-anywhere-to-close
+  // target — the tablet fix. Touch handlers are explicit so a slight finger
+  // slide never eats the tap.
+  const craftBack = document.createElement('div');
+  craftBack.className = 'craft-backdrop hud-clickable'; craftBack.hidden = true;
+  craftBack.innerHTML = `
+    <div class="craft-panel">
+      <div class="craft-head">
+        <span class="craft-title">🔨 Crafting Bench</span>
+        <span class="cb-badge">Lv <span class="cb-lvl"></span> / 4</span>
+        <button class="craft-x" aria-label="Close">✕</button>
+      </div>
+      <div class="craft-inv"></div>
+      <div class="craft-list"></div>
+      <div class="craft-foot">
+        <button class="craft-up"></button>
+        <button class="craft-close-btn">Close ✕</button>
+      </div>
+    </div>`;
+  ui.hud.appendChild(craftBack);
+  const craftEl = craftBack.querySelector('.craft-panel');
+  // Fire on pointerdown (unifies mouse + touch + pen and is the most reliable
+  // path in this codebase — the prompt system uses pointer events too), with a
+  // touchstart fallback and a debounce so nothing double-fires.
+  function bindTap(el, fn) {
+    let last = 0;
+    const fire = () => { if (el.disabled) return; const t = performance.now(); if (t - last < 320) return; last = t; fn(); };
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); fire(); });
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fire(); }, { passive: false });
+  }
+  bindTap(craftBack.querySelector('.craft-x'), () => closeCraft());
+  bindTap(craftBack.querySelector('.craft-close-btn'), () => closeCraft());
+  bindTap(craftBack.querySelector('.craft-up'), () => upgradeBench());
+  // tap the dark area outside the panel to dismiss
+  let backLast = 0;
+  const backClose = () => { const t = performance.now(); if (t - backLast < 320) return; backLast = t; closeCraft(); };
+  craftBack.addEventListener('pointerdown', (e) => { if (e.target === craftBack) backClose(); });
+  craftBack.addEventListener('touchstart', (e) => { if (e.target === craftBack) { e.preventDefault(); backClose(); } }, { passive: false });
   function renderCraftPanel() {
-    if (craftEl.hidden) return;
+    if (craftBack.hidden) return;
     craftEl.querySelector('.cb-lvl').textContent = benchLevel;
     craftEl.querySelector('.craft-inv').innerHTML =
-      [['wood', player.wood], ['food', player.food], ['scrap', player.scrap], ['battery', player.batteries], ['gem', player.gem], ['bandage', player.bandages]]
-        .map(([k, v]) => `<span class="ci">${LOOT_ICON[k]} ${v}</span>`).join('');
+      [['wood', player.wood], ['scrap', player.scrap], ['food', player.food], ['battery', player.batteries], ['gem', player.gem], ['bandage', player.bandages]]
+        .map(([k, v]) => `<span class="ci">${LOOT_ICON[k]}<b>${v}</b></span>`).join('');
     const list = craftEl.querySelector('.craft-list');
     list.innerHTML = '';
     for (const r of RECIPES) {
@@ -1020,22 +1154,22 @@ export default async function launch({ root, user, game }) {
       const done = r.once && r.once();
       const afford = canAfford(r.cost);
       const row = document.createElement('div');
-      row.className = 'craft-row' + (locked ? ' locked' : '');
+      row.className = 'craft-row' + (locked ? ' locked' : '') + (done ? ' done' : '');
       row.innerHTML = `<span class="cr-ic">${r.icon}</span>
-        <span class="cr-mid"><b>${r.name}</b><small>${locked ? `Unlocks at bench Lv ${r.lvl}` : r.desc}</small></span>
-        <button class="cr-btn">${done ? '✓' : locked ? '🔒' : costStr(r.cost)}</button>`;
+        <span class="cr-mid"><b>${r.name}</b><small>${locked ? `🔒 Unlocks at bench Lv ${r.lvl}` : r.desc}</small></span>
+        <button class="cr-btn">${done ? '✓ Made' : locked ? '🔒' : costStr(r.cost)}</button>`;
       const btn = row.querySelector('.cr-btn');
       btn.disabled = locked || done || !afford;
-      if (!locked && !done) btn.addEventListener('click', () => craft(r));
+      if (!locked && !done) bindTap(btn, () => craft(r));
       list.appendChild(row);
     }
     const up = craftEl.querySelector('.craft-up');
     const next = benchLevel + 1, upCost = BENCH_UP[next];
     if (!upCost) { up.textContent = '★ Bench fully upgraded'; up.disabled = true; }
-    else { up.textContent = `⬆ Upgrade Bench → Lv${next}  (${costStr(upCost)})`; up.disabled = !canAfford(upCost); }
+    else { up.textContent = `⬆ Upgrade → Lv ${next}  ·  ${costStr(upCost)}`; up.disabled = !canAfford(upCost); }
   }
-  function openCraft() { craftOpen = true; busy = true; craftEl.hidden = false; renderCraftPanel(); sfx.play('click'); }
-  function closeCraft() { craftOpen = false; busy = false; craftEl.hidden = true; }
+  function openCraft() { craftOpen = true; busy = true; craftBack.hidden = false; renderCraftPanel(); sfx.play('click'); }
+  function closeCraft() { craftOpen = false; busy = false; craftBack.hidden = true; }
   prompts.push(ui.addPrompt({
     getPos: () => benchPos.clone().add(new THREE.Vector3(0, 2.2, 0)),
     text: '🔨 Craft', key: 'E', radius: 5, hold: 0,
@@ -1173,7 +1307,7 @@ export default async function launch({ root, user, game }) {
       setTimeout(() => {
         if (save.phase !== 'night' || gameOver) return;
         spawnDeer(boss || save.night >= 12);
-        ui.announce('...something is watching', 'The Deer is awake. Shine your flashlight to turn it away.', 4);
+        ui.announce('...something moves in the trees', 'The Deer roams. Stay near camp, keep the fire lit — or it comes for you. (Flashlight turns it away.)', 5);
         sfx.play('awaken', { volume: 0.4 });
       }, boss ? 6000 : 9000);
     }
@@ -1349,8 +1483,13 @@ export default async function launch({ root, user, game }) {
   setTimeout(() => humans.filter((h) => h.chat).forEach((h, i) => chatter.botSay(h.chat, 'spawn', {}, 0.7, 0.5 + i * 1.3)), 1000);
 
   // ================= monster AI (host) =================
-  // THE DEER's stalk: won't enter the lit campfire ring, ramps speed the longer
-  // it chases, freezes when the flashlight catches it, and rages when hungry.
+  // How far a survivor may stray from camp before the Deer stops roaming and
+  // starts hunting them. It ALSO hunts if the campfire has gone out.
+  const DEER_SAFE_R = 52;
+  // THE DEER: roams the forest by default. It only turns hunter when a survivor
+  // wanders too far from camp OR the campfire dies. Ramps speed while chasing,
+  // freezes when the flashlight catches it, won't enter the firelight, rages
+  // when hungry.
   function deerThink(w, dt, t) {
     const T = w.type;
     // stunned by a flashlight beam — recoil and hold
@@ -1358,26 +1497,62 @@ export default async function launch({ root, user, game }) {
       w.stunT -= dt;
       w.ctrl.moveDir.set(0, 0, 0);
       w.group.rotation.x = -0.25 + Math.sin(t * 30) * 0.05; // flinch
-      for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#7a1410' : '#5a5a20');
+      for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#5a1008' : '#7a746a');
       return;
     }
     w.group.rotation.x = 0;
-    for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#ff2a20' : '#eaff6a');
+    for (const e of w.group.userData.eyes || []) e.material.color.set(w.hungry ? '#ff2a20' : '#efe9dc');
     w.stunResist = Math.max(0, w.stunResist - dt * 0.35); // resistance fades over time
-    // retarget the nearest survivor
-    w.retargetT -= dt;
-    if (!w.target || !w.target.alive || w.retargetT <= 0) {
-      w.retargetT = 1.2 + Math.random();
-      let best = null, bd = Infinity;
-      for (const tg of wolfTargets()) { const d = distXZ(w.ctrl.pos, tg.ctrl.pos); if (d < bd) { bd = d; best = tg; } }
-      w.target = best;
-    }
+
     const fuel = save.fuel, fireR = 7 + fuel / 100 * 12;
+    const fireOut = fuel < 5;
+    // ---- pick who (if anyone) is exposed enough to hunt ----
+    // It targets a survivor who has STRAYED past the safe radius; if the fire is
+    // out, everyone is fair game. A bot cowering in camp never makes it hunt.
+    w.retargetT -= dt;
+    if (w.retargetT <= 0 || !w.target || !w.target.alive) {
+      w.retargetT = 0.7 + Math.random() * 0.5;
+      const survivors = wolfTargets();
+      const nearestOf = (list) => { let best = null, bd = Infinity; for (const s of list) { const d = distXZ(w.ctrl.pos, s.ctrl.pos); if (d < bd) { bd = d; best = s; } } return best; };
+      if (fireOut) w.target = nearestOf(survivors);
+      else { const strayed = survivors.filter((s) => distXZ(s.ctrl.pos, FIRE) > DEER_SAFE_R); w.target = strayed.length ? nearestOf(strayed) : null; }
+    }
     const tgt = w.target;
-    const goal = tgt ? tgt.ctrl.pos : player.ctrl.pos;
-    const targetSafe = tgt && distXZ(tgt.ctrl.pos, FIRE) < fireR && fuel > 8;
+    const wantAggro = !!tgt;
+    if (wantAggro && !w.aggro) {                 // just became a hunter
+      w.aggro = true; w.chaseT = 0;
+      ui.announce('THE DEER HAS YOUR SCENT', fireOut ? 'The fire is out — get it lit!' : 'You strayed too far — get back to camp!', 3.5);
+      sfx.play('awaken', { volume: 0.6 }); app.screenShake?.(0.6);
+      for (const e of w.group.userData.eyes || []) e.material.color.set('#ff2a20');
+    } else if (!wantAggro && w.aggro) {           // calmed back down
+      w.aggro = false; w.chaseT = 0;
+    }
+
+    if (!w.aggro) {
+      // ---- ROAM: amble to wander points, keeping clear of the firelight ----
+      w.chaseT = Math.max(0, w.chaseT - dt);
+      w.wanderT = (w.wanderT || 0) - dt;
+      const reached = w.wander && distXZ(w.ctrl.pos, w.wander) < 4;
+      if (!w.wander || reached || w.wanderT <= 0) {
+        const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * (MAP * 0.55);
+        w.wander = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+        w.wanderT = 4 + Math.random() * 5;
+      }
+      // steer toward the wander point, but push out if drifting into the fire ring
+      let gx = w.wander.x - w.ctrl.pos.x, gz = w.wander.z - w.ctrl.pos.z;
+      if (fuel > 8 && distXZ(w.ctrl.pos, FIRE) < fireR + 6) { gx = w.ctrl.pos.x - FIRE.x; gz = w.ctrl.pos.z - FIRE.z; }
+      const gl = Math.hypot(gx, gz) || 1;
+      w.ctrl.moveDir.set(gx / gl, 0, gz / gl);
+      w.group.rotation.y = Math.atan2(gx / gl, gz / gl);
+      w.ctrl.speed = T.speed * 0.42;
+      return;
+    }
+
+    // ---- HUNT ----
+    const goal = tgt.ctrl.pos;
+    const targetSafe = distXZ(tgt.ctrl.pos, FIRE) < fireR && fuel > 8;
     if (targetSafe) {
-      // it will NOT enter the firelight — prowl the treeline edge of the ring
+      // prey ducked into the firelight — prowl the ring's edge, it won't enter
       w.chaseT = Math.max(0, w.chaseT - dt);
       const ang = Math.atan2(w.ctrl.pos.z - FIRE.z, w.ctrl.pos.x - FIRE.x) + dt * 0.5;
       const rr = fireR + 4;
@@ -1387,7 +1562,7 @@ export default async function launch({ root, user, game }) {
       w.ctrl.speed = T.speed * 0.7;
       return;
     }
-    // hunt: the longer the chase, the faster it comes (Roblox behavior)
+    // the longer the chase, the faster it comes
     w.chaseT += dt;
     const ramp = 1 + Math.min(w.chaseT * 0.05, w.hungry ? 1.1 : 0.75);
     w.ctrl.speed = (T.speed * (w.hungry ? 1.2 : 1) + save.night * 0.1) * ramp;
@@ -1399,20 +1574,18 @@ export default async function launch({ root, user, game }) {
       if (w.ctrl.grounded && Math.hypot(w.ctrl.vel.x, w.ctrl.vel.z) < w.ctrl.speed * 0.3) w.ctrl.wantJump = true;
     } else {
       w.ctrl.moveDir.set(0, 0, 0);
-      if (tgt) {
-        w.group.rotation.y = Math.atan2(tgt.ctrl.pos.x - w.ctrl.pos.x, tgt.ctrl.pos.z - w.ctrl.pos.z);
-        w.attackT -= dt;
-        if (w.attackT <= 0) {
-          w.attackT = w.hungry ? 0.9 : 1.3;
-          const dmg = T.dmg * (w.hungry ? 1.3 : 1);
-          app.burst(w.ctrl.pos.clone().add(new THREE.Vector3(0, 6, 0)), { color: '#8a1a14', count: 8, speed: 12, size: 0.3, life: 0.35 });
-          sfx.play('growl', { volume: 0.5 });
-          setTimeout(() => {
-            if (!w.alive || !tgt.alive || distXZ(w.ctrl.pos, tgt.ctrl.pos) >= T.reach + 1) return;
-            if (tgt.remote) net?.sendTopic('watk', { to: tgt.peerId, dmg });
-            else hurtHuman(tgt, dmg);
-          }, 220);
-        }
+      w.group.rotation.y = Math.atan2(tgt.ctrl.pos.x - w.ctrl.pos.x, tgt.ctrl.pos.z - w.ctrl.pos.z);
+      w.attackT -= dt;
+      if (w.attackT <= 0) {
+        w.attackT = w.hungry ? 0.9 : 1.3;
+        const dmg = T.dmg * (w.hungry ? 1.3 : 1);
+        app.burst(w.ctrl.pos.clone().add(new THREE.Vector3(0, 6, 0)), { color: '#8a1a14', count: 8, speed: 12, size: 0.3, life: 0.35 });
+        sfx.play('growl', { volume: 0.5 });
+        setTimeout(() => {
+          if (!w.alive || !tgt.alive || distXZ(w.ctrl.pos, tgt.ctrl.pos) >= T.reach + 1) return;
+          if (tgt.remote) net?.sendTopic('watk', { to: tgt.peerId, dmg });
+          else hurtHuman(tgt, dmg);
+        }, 220);
       }
     }
   }
