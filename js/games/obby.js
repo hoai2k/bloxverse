@@ -74,7 +74,13 @@ export default async function launch({ root, user, game }) {
     return { mesh, col };
   }
 
-  const rand = (a, b) => a + Math.random() * (b - a);
+  // Deterministic course generation: every client seeds from the same fixed
+  // string, so the whole 30-stage tower — every platform, hazard and gap — is
+  // byte-for-byte identical on every machine. This is what keeps remote
+  // players (rendered at absolute coordinates) standing ON the platforms
+  // instead of floating in the air or teleporting through a divergent tower.
+  const srand = W.makeRng(W.hashSeed('bloxverse-obby-course-v2'));
+  const rand = (a, b) => a + srand() * (b - a);
 
   // ---- per-stage build context (travel-relative helpers) ----
   // B.plat(fw, side, up, along, across) lays a path platform: it moves the
@@ -151,7 +157,7 @@ export default async function launch({ root, user, game }) {
       for (let i = 0; i < 4; i++) {
         B.plat(8, 0, 1, 4.6, 4.6);
         B.hazard(0, 5, 0, 4.6, 4.6, { kill: true });
-        if (Math.random() < B.diff) B.hazard(0, -5, 0, 4.6, 4.6, { kill: true });
+        if (srand() < B.diff) B.hazard(0, -5, 0, 4.6, 4.6, { kill: true });
       }
       B.plat(8, 0, 1, 5, 5);
     } },
@@ -211,7 +217,7 @@ export default async function launch({ root, user, game }) {
       bar.position.set(at.x, at.y + 1.3, at.z);
       scene.add(bar);
       const col = world.addCollider(bar, { solid: false, touch: 'kill', obb: { half: new THREE.Vector3(7.5, 0.8, 0.8) } });
-      spinners.push({ bar, speed: (0.9 + B.diff * 1.3) * (Math.random() < 0.5 ? 1 : -1), col });
+      spinners.push({ bar, speed: (0.9 + B.diff * 1.3) * (srand() < 0.5 ? 1 : -1), col });
       B.plat(11, 0, 1.5, 6, 6);
     } },
   ];
@@ -222,7 +228,7 @@ export default async function launch({ root, user, game }) {
   for (let s = 1; s < STAGES; s++) {
     if (s === 1) { order.push(0); lastKind = 0; continue; }
     const pool = KINDS.map((k, i) => i).filter((i) => KINDS[i].min <= s && i !== lastKind);
-    const idx = pool[Math.floor(Math.random() * pool.length)];
+    const idx = pool[Math.floor(srand() * pool.length)];
     order.push(idx); lastKind = idx;
   }
 
@@ -269,6 +275,19 @@ export default async function launch({ root, user, game }) {
     scene.add(flag);
   }
 
+  // debug handle — lets tests confirm the tower is byte-identical across
+  // clients (deterministic generation is what keeps remote players on the
+  // platforms instead of floating), and inspect course geometry.
+  if (typeof window !== 'undefined') {
+    window.__bvObby = {
+      // compact signature of the shared geometry every client must agree on
+      signature: () => checkpointPos.slice(1).map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`).join('|'),
+      checkpoints: () => checkpointPos.slice(1).map((p) => ({ x: p.x, y: p.y, z: p.z })),
+      colliderCount: () => world.colliders.length,
+      order,
+    };
+  }
+
   // ================= racers =================
   const chatter = new ChatterManager(ui, user.name);
   chatter.idleSituation = 'idle';
@@ -291,6 +310,14 @@ export default async function launch({ root, user, game }) {
     if (reason === 'lava') ui.system('You fell into the void!');
   }
   ctrl.teleport(checkpointPos[1].x, checkpointPos[1].y + 1, checkpointPos[1].z);
+  // let tests drop the local player onto any checkpoint to exercise the netcode
+  if (typeof window !== 'undefined' && window.__bvObby) {
+    window.__bvObby.teleport = (stage) => {
+      const p = checkpointPos[Math.max(1, Math.min(STAGES, stage | 0))];
+      ctrl.teleport(p.x, p.y + 1, p.z); me.stage = Math.max(1, Math.min(STAGES, stage | 0));
+    };
+    window.__bvObby.pos = () => ({ x: ctrl.pos.x, y: ctrl.pos.y, z: ctrl.pos.z });
+  }
 
   const personas = pickBots(5);
   const racers = personas.map((p) => {

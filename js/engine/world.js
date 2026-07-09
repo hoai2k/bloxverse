@@ -4,6 +4,32 @@
 // ============================================================
 import * as THREE from 'three';
 
+// ---------------- deterministic RNG ----------------
+// Seeded generators so every client builds an IDENTICAL world from the same
+// seed (required for multiplayer: remote players are rendered at absolute
+// world coordinates, so the geometry under those coordinates must match on
+// every machine, or friends appear to float/teleport).
+export function hashSeed(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// mulberry32 — tiny, fast, well-distributed PRNG. Returns a function that
+// yields floats in [0,1); same seed → same sequence on every platform.
+export function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ---------------- procedural textures ----------------
 const texCache = new Map();
 function canvasTex(key, size, draw, repeat = 1) {
