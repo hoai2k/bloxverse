@@ -3,6 +3,7 @@ name: Deploy Bloxverse to GitHub Pages
 on:
   push:
     branches:
+      - main
       - claude/roblox-clone-ai-players-zx6mfl
   workflow_dispatch: {}
 
