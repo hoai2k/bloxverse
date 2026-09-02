@@ -122,7 +122,7 @@ function cross(rows, pal) { return pix(rows, pal); }
 const C = {
   stone: [125, 125, 125], dirt: [134, 96, 67], grass: [96, 160, 55], sand: [219, 207, 163], gravel: [131, 127, 127], cobble: [110, 110, 110],
   water: [45, 92, 200], lava: [230, 110, 20], snow: [240, 245, 250], ice: [150, 190, 240], obsidian: [20, 16, 32], bedrock: [60, 60, 60],
-  netherrack: [110, 45, 45], glow: [230, 190, 90], coal: [40, 40, 40], iron: [200, 170, 140], gold: [250, 220, 60], diamond: [90, 230, 220],
+  netherrack: [138, 62, 60], glow: [230, 190, 90], coal: [40, 40, 40], iron: [200, 170, 140], gold: [250, 220, 60], diamond: [90, 230, 220],
   redstone: [220, 30, 30], lapis: [30, 70, 190], emerald: [40, 210, 90], copper: [200, 120, 80], quartz: [235, 228, 220], netherite: [70, 62, 62],
   wood: [104, 78, 47], leather: [170, 110, 60], oakPlank: [162, 130, 78], oakBark: [96, 76, 44], oakInner: [190, 152, 92],
 };

@@ -285,6 +285,7 @@ export class Generator {
         continue;
       }
       if (above !== 0 && above !== B.snow) continue;
+      if (above === B.snow && rng() < 0.85) continue;
       const r = rng();
       const isGrass = top === B.grass_block;
       if (isGrass && r < (biome.grass || 0)) { blocks[base + h + 1] = (biome.ferns && rng() < 0.4) ? B.fern : B.short_grass; if (rng() < 0.08) { blocks[base + h + 1] = B.tall_grass; blocks[base + h + 2] = B.tall_grass; meta[base + h + 2] = 8; } }
@@ -307,7 +308,7 @@ export class Generator {
       }
       // swamp lily pads & ice spikes
       if (biome.swamp && h < SEA_LEVEL && rng() < 0.15 && blocks[base + SEA_LEVEL] === B.water) blocks[base + SEA_LEVEL + 1] = B.lily_pad;
-      if (biome.spikes && rng() < 0.02) { const n = 6 + Math.floor(rng() * 10); for (let k = 1; k <= n; k++) blocks[base + h + k] = B.packed_ice; }
+      if (biome.spikes && rng() < 0.006) { const n = 4 + Math.floor(rng() * 7); for (let k = 1; k <= n; k++) blocks[base + h + k] = B.packed_ice; }
       // big mushrooms
       if (biome.bigMushrooms && rng() < 0.01) this.placeBigMushroom(wx, h + 1, wz, rng, (a, b2, c, id, m) => { const lx = a - bx, lz = c - bz; if (lx >= 0 && lx < CX && lz >= 0 && lz < CZ && b2 < CY) { blocks[(lx * CZ + lz) * CY + b2] = id; } });
     }

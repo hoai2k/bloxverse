@@ -15,7 +15,7 @@ void main() {
   float sky = aLight.x / 15.0; float blk = aLight.y / 15.0;
   float s = sky * uSun;
   float l = max(max(s, blk), uAmbient);
-  float b = mix(l / (4.0 - 3.0 * l), l, 0.3);
+  float b = mix(l / (4.0 - 3.0 * l), l, 0.25);
   vLight = (0.03 + 0.97 * b) * aShade;
   vWarm = clamp(blk - s, 0.0, 1.0) * b;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -34,6 +34,7 @@ void main() {
   float f = smoothstep(uFogNear, uFogFar, vDist);
   col = mix(col, uFogColor, f);
   gl_FragColor = vec4(col, c.a * uAlphaMul);
+  #include <colorspace_fragment>
 }`;
 
 export class Renderer {
@@ -147,7 +148,7 @@ export class Renderer {
     // daylight factor: 1 at noon, 0 at midnight with smooth transitions around 12000-13800 and 22200-24000
     let day;
     if (t < 12000) day = 1; else if (t < 13800) day = 1 - (t - 12000) / 1800; else if (t < 22200) day = 0; else day = (t - 22200) / 1800;
-    const sun = 0.28 + 0.72 * day;
+    const sun = 0.25 + 0.75 * day;
     let sky, fog;
     if (dim === 1) { sky = new THREE.Color(0.22, 0.04, 0.04); fog = new THREE.Color(0.3, 0.06, 0.05); }
     else if (dim === 2) { sky = new THREE.Color(0.03, 0.02, 0.05); fog = new THREE.Color(0.08, 0.06, 0.1); }
@@ -163,7 +164,7 @@ export class Renderer {
     let fogNear = this.fogDistance * 0.75, fogFar = this.fogDistance;
     if (this.underwater) { fog = new THREE.Color(0.1, 0.25, 0.6); sky = fog.clone(); fogNear = 2; fogFar = 18 + 10 * day; }
     if (this.inLava) { fog = new THREE.Color(0.9, 0.3, 0.05); sky = fog.clone(); fogNear = 0; fogFar = 2; }
-    const ambient = dim === 1 ? 0.33 : dim === 2 ? 0.36 : 0;
+    const ambient = dim === 1 ? 0.45 : dim === 2 ? 0.4 : 0;
     for (const m of [this.matOpaque, this.matTrans]) { m.uniforms.uSun.value = sunU; m.uniforms.uAmbient.value = ambient; m.uniforms.uFogColor.value.copy(fog); m.uniforms.uFogNear.value = fogNear; m.uniforms.uFogFar.value = fogFar; }
     this.three.setClearColor(sky);
     this.skyColor.copy(sky); this.fogColor.copy(fog);

@@ -81,7 +81,7 @@ input[type=range] { width: 100%; }
 #xp { position: relative; height: 8px; background: #2c2c2c; border: 1px solid #000; margin: 3px 0 4px; }
 #xp-fill { height: 100%; background: #7ef54a; width: 0; }
 #xp-level { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); color: #7ef54a; font-weight: bold; font-size: 14px; text-shadow: 1px 1px #000; }
-#item-name { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--slot) + 62px); text-align: center; white-space: nowrap; font-size: 15px; text-shadow: 2px 2px #000; opacity: 0; transition: opacity 0.4s; }
+#item-name { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--slot) + 78px); text-align: center; white-space: nowrap; font-size: 15px; text-shadow: 2px 2px #000; opacity: 0; transition: opacity 0.4s; }
 #hotbar { display: flex; background: rgba(0,0,0,0.55); border: 2px solid #222; padding: 2px; gap: 2px; }
 #offhand-slot { position: absolute; left: -54px; bottom: 0; }
 .slot { position: relative; width: var(--slot); height: var(--slot); background: #8b8b8b; border: 2px solid; border-color: #373737 #fff #fff #373737; display: flex; align-items: center; justify-content: center; }

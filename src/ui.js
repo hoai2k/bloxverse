@@ -89,6 +89,7 @@ export class UI {
     // sleeping
     const so = $('#sleep-overlay'); if (p.sleeping) { so.hidden = false; so.style.opacity = Math.min(1, p.sleepT / 2); } else if (!so.hidden) { so.style.opacity = 0; setTimeout(() => { if (!p.sleeping) so.hidden = true; }, 500); }
     if (this.debugOn) this.updateDebug();
+    if (this.screen && this.screen.update && this.screen.type === 'furnace') this.screen.update();
   }
   damageFlash() { $('#vignette').classList.add('hurt'); this.flashT = 0.4; }
   showToast(t) { $('#toast').textContent = t; $('#toast').style.opacity = 1; this.toastT = 3; }
