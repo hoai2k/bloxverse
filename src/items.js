@@ -133,7 +133,7 @@ export function fuelValue(id) { const d = getItem(id); if (!d) return 0; if (d.f
 
 // Stack helpers: a stack is {id, count, dmg?} or null
 export function makeStack(id, count = 1, dmg = 0) { id = resolveId(id); return { id, count, dmg }; }
-export function canMerge(a, b) { return a && b && a.id === b.id && (a.dmg || 0) === (b.dmg || 0) && maxStack(a.id) > 1; }
+export function canMerge(a, b) { return a && b && a.id === b.id && (a.dmg || 0) === (b.dmg || 0) && maxStack(a.id) > 1 && !a.ench && !b.ench; }
 
 // Furnace recipes: input id -> {id, count, xp}
 export const SMELTING = new Map();

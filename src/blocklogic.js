@@ -3,6 +3,7 @@ import { BLOCKS, B, isSoil, WOODS, isReplaceable } from './blocks.js';
 import { I, getItem, resolveId, SMELTING, fuelValue, isBlockItem } from './items.js';
 import { CY } from './chunk.js';
 import { SEA_LEVEL } from './worldgen.js';
+import { rollEnchantments } from './enchant.js';
 
 const H4 = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
 const D6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -354,6 +355,8 @@ export function fillLoot(te, kind, rng) {
     const e = table[Math.floor(rng() * table.length)]; if (!e[3] || rng() > e[3]) continue;
     let id; try { id = resolveId(e[0]); } catch { continue; }
     const slot = Math.floor(rng() * 27); if (te.slots[slot]) continue;
-    te.slots[slot] = { id, count: e[1] + Math.floor(rng() * (e[2] - e[1] + 1)), dmg: 0 };
+    const st = { id, count: e[1] + Math.floor(rng() * (e[2] - e[1] + 1)), dmg: 0 };
+    if (id === I.enchanted_book) { st.ench = rollEnchantments({ id: I.book }, 10 + Math.floor(rng() * 20), rng); st.count = 1; }
+    te.slots[slot] = st;
   }
 }

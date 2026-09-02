@@ -5,6 +5,7 @@ import { Inventory } from './inventory.js';
 import { moveEntity, GRAVITY, fluidState, intersectsSolid } from './physics.js';
 import { placementFor, applyBoneMeal, igniteTNT } from './blocklogic.js';
 import { CY } from './chunk.js';
+import { enchantLevel } from './enchant.js';
 import { Mob } from './entities.js';
 
 export const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'];
@@ -50,7 +51,7 @@ export class Player {
     if (!Number.isFinite(this.x + this.y + this.z + this.yaw + this.pitch)) { console.warn('player state invalid, resetting'); if (!Number.isFinite(this.yaw)) this.yaw = 0; if (!Number.isFinite(this.pitch)) this.pitch = 0; if (!Number.isFinite(this.x + this.y + this.z)) { const sp = this.bedSpawn || this.spawn || { x: 0.5, y: 80, z: 0.5 }; this.x = sp.x; this.y = sp.y; this.z = sp.z; } this.vx = this.vy = this.vz = 0; }
     if (this.sleeping) { this.sleepT += dt; return; }
     const uiOpen = g.ui.screenOpen;
-    const fwd = !uiOpen && inp.key('KeyW') - (!uiOpen && inp.key('KeyS')), strafe = !uiOpen && inp.key('KeyD') - (!uiOpen && inp.key('KeyA'));
+    const { fwd, strafe } = inp.axes(uiOpen);
     const jump = !uiOpen && inp.key('Space'), sneakKey = !uiOpen && (inp.key('ShiftLeft') || inp.key('ShiftRight')), sprintKey = !uiOpen && (inp.key('ControlLeft') || inp.key('KeyR'));
     const fs = fluidState(w, this, this.eyeY);
     this.inWater = fs.water; this.inLava = fs.lava; this.headInWater = fs.head; this.headInLava = fs.headLava;
@@ -74,7 +75,7 @@ export class Player {
     // movement
     let speed = 4.317; if (this.sprinting) speed *= 1.3; if (this.sneaking) speed *= 0.3; if (this.effects.speed > 0) speed *= 1.2; if (inWeb) speed *= 0.15; if (blockAt === B.soul_sand || w.getBlock(Math.floor(this.x), Math.floor(this.y - 0.01), Math.floor(this.z)) === B.soul_sand) speed *= 0.4;
     if (this.flying) speed = this.sprinting ? 21.8 : 10.9;
-    if ((this.inWater || this.inLava) && !this.flying) speed = this.sprinting ? 4.4 : 2.2;
+    if ((this.inWater || this.inLava) && !this.flying) { speed = this.sprinting ? 4.4 : 2.2; const ds = enchantLevel(this.inventory.armor[3], 'depth_strider'); speed *= 1 + ds * 0.4; }
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     let mx = (-sin * fwd + cos * strafe), mz = (-cos * fwd - sin * strafe);
     const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
@@ -159,7 +160,7 @@ export class Player {
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]]) { const cx = Math.floor(this.x + dx * 0.4), cz = Math.floor(this.z + dz * 0.4); for (let dy = 0; dy <= 1; dy++) if (w.getBlock(cx, by + dy, cz) === B.cactus && Math.random() < dt * 2) this.hurt(1, null, { nature: true }); }
     if (this.inLava && !this.invulnerable) { this.fire = 15; if (Math.random() < dt * 2.5) this.hurt(4, null, { fire: true }); }
     if (this.fire > 0) { this.fire -= dt; this._fireT = (this._fireT || 0) + dt; if (this._fireT > 1) { this._fireT = 0; if (!this.effects.fireRes) this.hurt(1, null, { fire: true }); } if (this.inWater || g.weather.raining && w.getSky(bx, by + 2, bz) >= 15) this.fire = 0; if (this.invulnerable) this.fire = 0; }
-    if (this.headInWater && !this.invulnerable) { this.air -= dt * 20; if (this.air <= 0) { this.air = 0; this._drownT = (this._drownT || 0) + dt; if (this._drownT > 1) { this._drownT = 0; this.hurt(2, null, { drown: true }); } } } else this.air = Math.min(300, this.air + dt * 80);
+    if (this.headInWater && !this.invulnerable) { this.air -= dt * 20 / (1 + enchantLevel(this.inventory.armor[0], 'respiration')); if (this.air <= 0) { this.air = 0; this._drownT = (this._drownT || 0) + dt; if (this._drownT > 1) { this._drownT = 0; this.hurt(2, null, { drown: true }); } } } else this.air = Math.min(300, this.air + dt * 80);
     if (this.y < -10) { this._voidT = (this._voidT || 0) + dt; if (this._voidT > 0.5) { this._voidT = 0; this.hurt(4, null, { void: true }); } }
     // hunger, regen, effects
     this.updateStats(dt);
@@ -213,6 +214,8 @@ export class Player {
     let t = def.hardness * (canHarvest ? 1.5 : 5) / speed;
     if (this.headInWater) t *= 5; if (!this.onGround && !this.flying && !this.inWater) t *= 5;
     if (this.effects.haste) t /= 1.2;
+    const eff = held ? enchantLevel(held, 'efficiency') : 0; if (eff && correctType) t /= 1 + eff * 0.45;
+    if (this.headInWater && enchantLevel(this.inventory.armor[0], 'aqua_affinity')) t /= 5;
     return t;
   }
   canHarvest(def) { if (!def.needsTool) return true; const held = this.inventory.held; const tool = held ? getItem(held.id)?.tool : null; if (!tool) return false; const ok = tool.type === def.tool || (def.leaves && tool.type === 'shears') || (def.web && (tool.type === 'sword' || tool.type === 'shears')); return ok && tool.tier >= (def.minTier || 0); }
@@ -240,10 +243,12 @@ export class Player {
     const e = this.lookEntity; if (!e) return;
     const held = this.inventory.held; const item = held ? getItem(held.id) : null;
     let dmg = item?.tool?.damage ?? 1; if (this.effects.strength > 0) dmg += 3;
+    const sharp = enchantLevel(held, 'sharpness'); if (sharp) dmg += 0.5 + sharp * 0.5; const smite = enchantLevel(held, 'smite'); if (smite && e.def && (e.def.burns || e.type === 'zombie' || e.type === 'husk' || e.type === 'drowned')) dmg += smite * 2.5;
+    const kb = enchantLevel(held, 'knockback'); if (enchantLevel(held, 'fire_aspect')) e.fire = Math.max(e.fire || 0, 4 * enchantLevel(held, 'fire_aspect'));
     const crit = this.vy < 0 && !this.onGround && !this.inWater && !this.flying && !this.sprinting;
     if (crit) { dmg *= 1.5; g.particles.emit(e.x, e.y + e.h, e.z, 'crit', 8); }
     this.attackCd = item?.tool?.type === 'axe' ? 1 : item?.tool?.type === 'sword' ? 0.6 : 0.5;
-    e.hurt(Math.round(dmg * 2) / 2, this, this.sprinting ? 1 : 0.5);
+    e.hurt(Math.round(dmg * 2) / 2, this, (this.sprinting ? 1 : 0.5) + (kb || 0) * 0.6); if (enchantLevel(held, 'looting')) e.looting = enchantLevel(held, 'looting');
     if (item?.tool?.type === 'sword' || item?.tool?.type === 'axe') { if (e.dead) { for (const o of g.entities.list) if (o instanceof Mob && o !== e && !o.dead && o.distTo(e) < 1.5 && item.tool.type === 'sword') o.hurt(1, this, 0.3); } }
     this.lastTarget = e; this.lastTargetT = g.time;
     if (item?.tool && !this.creative && item.tool.type !== 'bow') this.inventory.damageHeld(item.tool.type === 'sword' || item.tool.type === 'axe' ? 1 : 2);
@@ -280,9 +285,9 @@ export class Player {
   }
   eat(h, s) { if (this.hunger >= 20 && h > 0 && !this.creative && s <= 0) return false; this.hunger = Math.min(20, this.hunger + h); this.saturation = Math.min(this.hunger, this.saturation + s); return true; }
   shootBow(charge) {
-    const g = this.game; const p = Math.min(1, charge / 1); const a = g.entities.spawnArrow(this, null, 0.4 + p * 1.1, Math.round(2 + p * 6));
-    a.damage = 2 + Math.round(p * 6); if (p >= 1) a.crit = true;
-    if (!this.creative) { this.inventory.remove(I.arrow, 1); this.inventory.damageHeld(1); }
+    const g = this.game; const p = Math.min(1, charge / 1); const held = this.inventory.held; const a = g.entities.spawnArrow(this, null, 0.4 + p * 1.1, Math.round(2 + p * 6));
+    a.damage = (2 + Math.round(p * 6)) * (1 + enchantLevel(held, 'power') * 0.25); if (p >= 1) a.crit = true; if (enchantLevel(held, 'flame')) a.flaming = true; a.punch = enchantLevel(held, 'punch');
+    if (!this.creative) { if (!enchantLevel(held, 'infinity')) this.inventory.remove(I.arrow, 1); this.inventory.damageHeld(1); }
     g.audio.play('bow'); g.ui.invalidateInventory();
   }
   // Right click
@@ -368,7 +373,11 @@ export class Player {
     if (this.dead || this.invulnerable && !opts.void) return false;
     if (this.hurtTimer > 0 && !opts.void) return false;
     if (this.effects.fireRes > 0 && opts.fire) return false;
-    if (source && !opts.fall && !opts.fire && !opts.poison && !opts.starve && !opts.drown) { const armor = this.inventory.armorValue(); amount *= 1 - Math.min(20, armor) / 25; this.inventory.damageArmor(1); if (g.difficulty === 1) amount *= 0.75; else if (g.difficulty === 3) amount *= 1.5; }
+    if (source && !opts.fall && !opts.fire && !opts.poison && !opts.starve && !opts.drown) { const armor = this.inventory.armorValue(); amount *= 1 - Math.min(20, armor) / 25; this.inventory.damageArmor(1); if (g.difficulty === 1) amount *= 0.75; else if (g.difficulty === 3) amount *= 1.5;
+      let prot = 0; for (const a of this.inventory.armor) { prot += enchantLevel(a, 'protection'); if (opts.explosion) prot += enchantLevel(a, 'blast_protection') * 2; if (source && source.kind) prot += enchantLevel(a, 'projectile_protection') * 2; } amount *= Math.max(0.2, 1 - Math.min(20, prot) * 0.04);
+      const thorns = this.inventory.armor.reduce((n, a) => n + enchantLevel(a, 'thorns'), 0); if (thorns && source && source.hurt && Math.random() < thorns * 0.15) source.hurt(1 + Math.floor(Math.random() * 3), null); }
+    if (opts.fall) { const ff = enchantLevel(this.inventory.armor[3], 'feather_falling'); amount *= Math.max(0, 1 - ff * 0.12); const pr = this.inventory.armor.reduce((n, a) => n + enchantLevel(a, 'protection'), 0); amount *= Math.max(0.2, 1 - pr * 0.04); amount = Math.round(amount); if (amount <= 0) return false; }
+    if (opts.fire) { let fp = 0; for (const a of this.inventory.armor) fp += enchantLevel(a, 'fire_protection') * 2 + enchantLevel(a, 'protection'); amount *= Math.max(0.2, 1 - fp * 0.04); if (amount < 0.5) return false; }
     if (this.blocking && source) amount *= 0.3;
     amount = Math.max(0, amount);
     if (this.effects.absorption > 0) { const a = Math.min(this.effects.absorption, amount); this.effects.absorption -= a; amount -= a; }
@@ -400,7 +409,7 @@ export class Player {
   }
   // ---------- XP ----------
   xpForLevel(l) { return l < 16 ? 2 * l + 7 : l < 31 ? 5 * l - 38 : 9 * l - 158; }
-  addXP(n) { this.xp += n; this.score += n; let need = this.xpForLevel(this.level); this.xpProgress += n; while (this.xpProgress >= need) { this.xpProgress -= need; this.level++; need = this.xpForLevel(this.level); this.game.audio.play('levelup'); } }
+  addXP(n) { n = this.inventory.mend(n); if (n <= 0) return; this.xp += n; this.score += n; let need = this.xpForLevel(this.level); this.xpProgress += n; while (this.xpProgress >= need) { this.xpProgress -= need; this.level++; need = this.xpForLevel(this.level); this.game.audio.play('levelup'); } }
   setLevel(l) { this.level = l; this.xpProgress = 0; }
 
   serialize() { return { x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, health: this.health, hunger: this.hunger, saturation: this.saturation, xp: this.xp, level: this.level, xpProgress: this.xpProgress, gamemode: this.gamemode, flying: this.flying, inventory: this.inventory.serialize(), spawn: this.spawn, bedSpawn: this.bedSpawn, effects: this.effects, stats: this.stats, score: this.score, air: this.air }; }

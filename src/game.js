@@ -11,6 +11,8 @@ import { I, getItem, makeStack, isBlockItem } from './items.js';
 import { attachGame, furnaceTick, fillLoot } from './blocklogic.js';
 import { CX, CY, CZ } from './chunk.js';
 import { hashString, mulberry32 } from './noise.js';
+import { TouchControls, hasTouch } from './touch.js';
+import { enchantLevel, rollEnchantments, applyEnchant } from './enchant.js';
 import { SEA_LEVEL } from './worldgen.js';
 
 const COLOR_HEX = { white: 0xf0f0f0, orange: 0xf07613, magenta: 0xbd44b3, light_blue: 0x3aafd9, yellow: 0xf8c527, lime: 0x70b919, pink: 0xed8dac, gray: 0x3e4447, light_gray: 0x8e8e86, cyan: 0x158991, purple: 0x792aac, blue: 0x35399d, brown: 0x724728, green: 0x546d1b, red: 0xa12722, black: 0x141519 };
@@ -27,9 +29,10 @@ class Input {
     document.addEventListener('mouseup', (e) => this.buttons.delete(e.button));
     c.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => { if (!this.locked) return; this.dx += e.movementX; this.dy += e.movementY; });
-    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === c; if (!this.locked && game.running && !game.ui.screenOpen && !game.player.dead) { /* user pressed Esc: open pause */ game.ui.openPause(); } });
+    document.addEventListener('pointerlockchange', () => { if (game.touch) return; this.locked = document.pointerLockElement === c; if (!this.locked && game.running && !game.ui.screenOpen && !game.player.dead) { /* user pressed Esc: open pause */ game.ui.openPause(); } });
   }
   key(code) { return this.keys.has(code) ? 1 : 0; }
+  axes(uiOpen) { if (uiOpen) return { fwd: 0, strafe: 0 }; let fwd = this.key('KeyW') - this.key('KeyS'), strafe = this.key('KeyD') - this.key('KeyA'); const t = this.game.touch; if (t && t.active && (t.axis.fwd || t.axis.strafe)) { fwd = t.axis.fwd; strafe = t.axis.strafe; } return { fwd, strafe }; }
   pressed(code) { return this.justPressed.has(code); }
   mouse(b) { return this.buttons.has(b === 2 ? 2 : b); }
   endFrame() { this.justPressed.clear(); this.dx = 0; this.dy = 0; }
@@ -44,14 +47,15 @@ export class Game {
     this.fps = 0; this.frameMs = 0; this.thirdPerson = 0; this.sunLevel = 1; this.stats = {}; this.daysSinceSleep = 0; this.lastSleepDay = 0;
     this.worlds = new Map(); this.bossEntity = null; this.rng = mulberry32(Date.now() >>> 0);
   }
-  requestPointerLock() { if (this.running && !this.ui.screenOpen) { try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch { } } }
+  requestPointerLock() { if (this.touch) { this.input.locked = true; return; } if (this.running && !this.ui.screenOpen) { try { const r = this.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch { } } }
 
   // ---------- lifecycle ----------
   async start(meta) {
     this.meta = meta; this.worldId = meta.id; this.seed = meta.seed; this.cheats = !!meta.cheats; this.hardcore = !!meta.hardcore; this.difficulty = meta.difficulty ?? 2; this.time = meta.time ?? 1000;
     this.dragonKilled = !!meta.dragonKilled; this.stats = meta.stats || {}; this.daysSinceSleep = meta.daysSinceSleep || 0;
     if (meta.weather) Object.assign(this.weather, meta.weather);
-    if (!this.renderer) { this.renderer = new Renderer(this.canvas); this.ui = new UI(this); this.input = new Input(this); attachGame(this); }
+    if (!this.renderer) { this.renderer = this.panoramaRenderer || new Renderer(this.canvas); this.ui = new UI(this); this.input = new Input(this); attachGame(this); if (hasTouch()) { this.touch = new TouchControls(this); } }
+    if (this.touch) this.touch.show(true);
     this.applySettings(this.settings);
     this.entities = new EntityManager(this); this.particles = new Particles(this);
     this.world = this.createWorld(meta.dim || 0);
@@ -118,6 +122,7 @@ export class Game {
     for (const w of this.worlds.values()) w.dispose(); this.worlds.clear();
     this.renderer.clearChunks(); this.entities.clear(); this.renderer.scene.remove(this.particles.points); if (this.playerModel) { this.renderer.scene.remove(this.playerModel); this.playerModel = null; }
     document.getElementById('hud').hidden = true; document.getElementById('chat-log').innerHTML = '';
+    if (this.touch) this.touch.show(false);
     if (this.onQuit) this.onQuit();
   }
 
@@ -132,7 +137,7 @@ export class Game {
     const p = this.player;
     if (!paused) {
       // mouse look
-      const inp = this.input; if (inp.locked && !this.ui.screenOpen && !p.sleeping) { const s = this.settings.sensitivity * 0.0022; p.yaw -= inp.dx * s; p.pitch -= inp.dy * s; p.pitch = Math.max(-Math.PI / 2 + 0.001, Math.min(Math.PI / 2 - 0.001, p.pitch)); }
+      const inp = this.input; if (this.touch) this.touch.update(); if (inp.locked && !this.ui.screenOpen && !p.sleeping) { const s = this.settings.sensitivity * 0.0022; p.yaw -= inp.dx * s; p.pitch -= inp.dy * s; p.pitch = Math.max(-Math.PI / 2 + 0.001, Math.min(Math.PI / 2 - 0.001, p.pitch)); }
       // world & simulation
       this.tickAcc += dt; let ticks = 0; while (this.tickAcc >= 0.05 && ticks < 4) { this.tick(); this.tickAcc -= 0.05; ticks++; }
       if (this.world.isLoaded(Math.floor(p.x), Math.floor(p.z))) { const sub = dt > 0.034 ? 2 : 1; for (let i = 0; i < sub; i++) p.update(dt / sub); } else p.updateLook();
@@ -233,13 +238,15 @@ export class Game {
     else if (button === 2) { this.useHold = 0; p.use(); }
     else if (button === 1) { const h = p.lookHit; if (!h) return; const inv = p.inventory; const id = h.id; if (p.creative) { const i = inv.slots.findIndex((s, k) => k < 9 && s && s.id === id); if (i >= 0) inv.selected = i; else { const empty = inv.slots.findIndex((s, k) => k < 9 && !s); const slot = empty >= 0 ? empty : inv.selected; inv.slots[slot] = makeStack(id, 1); inv.selected = slot; } } else { const i = inv.slots.findIndex((s, k) => k < 9 && s && s.id === id); if (i >= 0) inv.selected = i; } }
   }
-  dropHeld(all) { const p = this.player; const s = p.inventory.held; if (!s) return; const n = all ? s.count : 1; this.dropStack({ id: s.id, count: n, dmg: s.dmg }); s.count -= n; if (s.count <= 0) p.inventory.setHeld(null); this.renderer.swing(); }
+  dropHeld(all) { const p = this.player; const s = p.inventory.held; if (!s) return; const n = all ? s.count : 1; this.dropStack({ id: s.id, count: n, dmg: s.dmg, ench: s.ench }); s.count -= n; if (s.count <= 0) p.inventory.setHeld(null); this.renderer.swing(); }
   dropStack(stack) { const p = this.player; const d = p.lookDir; this.entities.dropItem(p.x + d[0] * 0.5, p.eyeY - 0.3, p.z + d[2] * 0.5, stack, false, [d[0] * 6 + p.vx, d[1] * 6 + 1, d[2] * 6 + p.vz]); this.ui.invalidateInventory(); }
   openBlockUI(kind, x, y, z) {
     const w = this.world; const def = BLOCKS[w.getBlock(x, y, z)];
     if (kind === 'crafting') this.ui.openCrafting(x, y, z);
     else if (kind === 'chest') { const te = w.getTileEntity(x, y, z); if (te.lootKind) { fillLoot(te, te.lootKind, Math.random); delete te.lootKind; } this.ui.openChest(te, def.displayName); }
     else if (kind === 'furnace') { const te = w.getTileEntity(x, y, z); this.ui.openFurnace(te, def); }
+    else if (kind === 'enchant') this.ui.openEnchant(x, y, z);
+    else if (kind === 'anvil') this.ui.openAnvil(x, y, z);
   }
   hurtPlayer(amount, source, bypassArmor = false) { return this.player.hurt(amount, source, bypassArmor ? { fall: true } : {}); }
   onPlayerDeath(cause) { this.ui.chatMessage('Player ' + cause, '#ff5555'); this.ui.showDeath(cause); if (this.hardcore) { this.meta.hardcoreDead = true; } this.save(false); }
@@ -254,7 +261,9 @@ export class Game {
     if (!doDrops || (player && player.creative)) return;
     const held = player ? player.inventory.held : null; const tool = held ? getItem(held.id)?.tool : null;
     if (player && !player.canHarvest(def)) return;
-    const drops = def.drops ? def.drops(meta, tool?.type, Math.random) : [{ id, count: 1 }];
+    let drops = def.drops ? def.drops(meta, tool?.type, Math.random) : [{ id, count: 1 }];
+    if (held && enchantLevel(held, 'silk_touch') && def.hardness >= 0 && !def.crop && !def.container) drops = [{ id, count: 1 }];
+    else if (held && enchantLevel(held, 'fortune') && (def.xp || def.name.includes('ore') || id === B.gravel || def.leaves)) { const f = enchantLevel(held, 'fortune'); drops = drops.map(d => ({ id: d.id, count: d.count * (Math.random() < f / (f + 2) ? 1 + Math.floor(Math.random() * f) + 1 : 1) })); }
     for (const d of drops) { let did = d.id; if (typeof did === 'string') did = I[did] ?? B[did]; if (did === undefined || d.count <= 0) continue; this.entities.dropItem(x + 0.5, y + 0.5, z + 0.5, makeStack(did, d.count), true); }
     if (def.xp && player) { const n = def.xp + Math.floor(Math.random() * 3); this.entities.spawnXP(x + 0.5, y + 0.5, z + 0.5, n); }
   }

@@ -5,6 +5,7 @@ import { itemIcon } from './textures.js';
 import { findRecipe, craftableRecipes, recipeIngredients, ingredientOptions, RECIPES } from './crafting.js';
 import { Container } from './inventory.js';
 import { runCommand } from './commands.js';
+import { enchantLines, isEnchanted, rollEnchantments, applyEnchant, anvilResult, applicable } from './enchant.js';
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -43,11 +44,11 @@ export class UI {
     for (let i = 0; i < 9; i++) { const s = el('div', 'slot'); hb.appendChild(s); this.hotbarEls.push(s); }
   }
   renderSlot(slotEl, stack, cache = true) {
-    const key = stack ? stack.id + ':' + stack.count + ':' + (stack.dmg || 0) : '';
+    const key = stack ? stack.id + ':' + stack.count + ':' + (stack.dmg || 0) + ':' + (stack.ench ? JSON.stringify(stack.ench) : '') : '';
     if (cache && slotEl.dataset.key === key) return; slotEl.dataset.key = key;
     slotEl.innerHTML = '';
     if (!stack) return;
-    const ic = itemIcon(stack.id); const c = document.createElement('canvas'); c.width = 32; c.height = 32; c.getContext('2d').drawImage(ic, 0, 0); slotEl.appendChild(c);
+    const ic = itemIcon(stack.id); const c = document.createElement('canvas'); c.width = 32; c.height = 32; c.getContext('2d').drawImage(ic, 0, 0); if (isEnchanted(stack)) c.classList.add('glint'); slotEl.appendChild(c);
     if (stack.count > 1) slotEl.appendChild(el('span', 'count', String(stack.count)));
     const d = getItem(stack.id); const dur = d?.tool?.durability || d?.armor?.durability;
     if (dur && stack.dmg > 0) { const bar = el('div', 'dur'); const f = el('i'); const p = 1 - stack.dmg / dur; f.style.width = (p * 100) + '%'; f.style.background = p > 0.5 ? '#4f4' : p > 0.25 ? '#ff4' : '#f44'; bar.appendChild(f); slotEl.appendChild(bar); }
@@ -233,7 +234,8 @@ export class UI {
   }
   showTooltip(ref) {
     const st = ref.slots[ref.index]; const tt = $('#tooltip'); if (!st) { tt.hidden = true; return; }
-    const d = getItem(st.id); tt.innerHTML = ''; tt.appendChild(el('div', '', itemName(st.id)));
+    const d = getItem(st.id); tt.innerHTML = ''; const title = el('div', '', itemName(st.id)); if (isEnchanted(st)) title.style.color = '#ff80ff'; tt.appendChild(title);
+    for (const line of enchantLines(st)) tt.appendChild(el('div', 'sub ench', line));
     if (d?.tool) tt.appendChild(el('div', 'sub', `${d.tool.type}  dmg ${d.tool.damage}  durability ${d.tool.durability - (st.dmg || 0)}/${d.tool.durability}`));
     if (d?.armor) tt.appendChild(el('div', 'sub', `armor +${d.armor.defense}  durability ${d.armor.durability - (st.dmg || 0)}/${d.armor.durability}`));
     if (d?.food) tt.appendChild(el('div', 'sub', `food +${d.food.hunger}  saturation +${d.food.saturation}`));
@@ -243,7 +245,9 @@ export class UI {
   }
   canPlace(ref, stack) {
     if (!stack) return true;
-    if (ref.kind === 'craftOut' || ref.kind === 'furnaceOut' || ref.kind === 'creative') return false;
+    if (ref.kind === 'craftOut' || ref.kind === 'furnaceOut' || ref.kind === 'creative' || ref.kind === 'anvilOut') return false;
+    if (ref.kind === 'enchantLapis') return stack.id === I.lapis_lazuli;
+    if (ref.kind === 'enchantItem' || ref.kind === 'anvilA' || ref.kind === 'anvilB') return true;
     if (ref.kind === 'armor') { const d = getItem(stack.id); if (ref.index === 0 && stack.id === B.carved_pumpkin) return true; return !!(d?.armor && d.armor.slot === ref.index); }
     if (ref.kind === 'furnaceFuel') return fuelValue(stack.id) > 0;
     if (ref.kind === 'furnaceIn') return SMELTING.has(stack.id);
@@ -255,6 +259,7 @@ export class UI {
     if (ref.kind === 'creative') { if (!st) { if (cur) { this.cursor = null; } this.refresh(); return; } if (shift) { g.player.inventory.add(makeStack(st.id, maxStack(st.id))); } else if (cur && cur.id === st.id) { cur.count = Math.min(maxStack(st.id), cur.count + (button === 2 ? 1 : maxStack(st.id))); } else this.cursor = makeStack(st.id, button === 2 ? 1 : maxStack(st.id)); this.refresh(); return; }
     if (ref.kind === 'trash') { if (cur) this.cursor = null; this.refresh(); return; }
     if (ref.kind === 'craftOut') { this.takeCraft(ref, shift); return; }
+    if (ref.kind === 'anvilOut') { this.takeAnvil(shift); return; }
     if (ref.kind === 'furnaceOut') { if (!st) return; if (shift) { const left = g.player.inventory.add(st); slots[i] = left > 0 ? { ...st, count: left } : null; } else if (!cur) { this.cursor = st; slots[i] = null; } else if (canMerge(cur, st) && cur.count + st.count <= maxStack(st.id)) { cur.count += st.count; slots[i] = null; } this.onFurnaceTake(ref); this.refresh(); return; }
     if (shift) { this.quickMove(ref); this.refresh(); return; }
     if (detail >= 2 && button === 0 && cur) { this.gather(cur); this.refresh(); return; }
@@ -264,7 +269,7 @@ export class UI {
       else if (canMerge(cur, st)) { const n = Math.min(maxStack(st.id) - st.count, cur.count); st.count += n; cur.count -= n; if (cur.count <= 0) this.cursor = null; }
       else if (this.canPlace(ref, cur)) { slots[i] = cur; this.cursor = st; }
     } else if (button === 2) {
-      if (!cur) { if (st) { const half = Math.ceil(st.count / 2); this.cursor = { id: st.id, count: half, dmg: st.dmg }; st.count -= half; if (st.count <= 0) slots[i] = null; } }
+      if (!cur) { if (st) { const half = Math.ceil(st.count / 2); this.cursor = { id: st.id, count: half, dmg: st.dmg, ench: st.ench }; st.count -= half; if (st.count <= 0) slots[i] = null; } }
       else if (!st) { if (this.canPlace(ref, cur)) { slots[i] = { id: cur.id, count: 1, dmg: cur.dmg }; cur.count--; if (cur.count <= 0) this.cursor = null; } }
       else if (canMerge(cur, st) && st.count < maxStack(st.id)) { st.count++; cur.count--; if (cur.count <= 0) this.cursor = null; }
     }
@@ -273,7 +278,7 @@ export class UI {
   gather(cur) { for (const ref of this.screen.slots) { if (ref.kind === 'creative' || ref.kind === 'craftOut' || ref.kind === 'furnaceOut') continue; const st = ref.slots[ref.index]; if (st && st !== cur && canMerge(cur, st)) { const n = Math.min(maxStack(cur.id) - cur.count, st.count); st.count -= n; cur.count += n; if (st.count <= 0) ref.slots[ref.index] = null; if (cur.count >= maxStack(cur.id)) break; } } }
   quickMove(ref) {
     const g = this.game, inv = g.player.inventory; const st = ref.slots[ref.index]; if (!st) return;
-    const containers = this.screen.slots.filter(r => r.kind !== 'inv' && r.kind !== 'hotbar' && r.kind !== 'craftOut' && r.kind !== 'furnaceOut' && r.kind !== 'creative' && r.kind !== 'trash');
+    const containers = this.screen.slots.filter(r => r.kind !== 'inv' && r.kind !== 'hotbar' && r.kind !== 'craftOut' && r.kind !== 'furnaceOut' && r.kind !== 'creative' && r.kind !== 'trash' && r.kind !== 'anvilOut');
     const put = (targets, stack) => { for (const t of targets) { if (!this.canPlace(t, stack)) continue; const ts = t.slots[t.index]; if (canMerge(ts, stack)) { const n = Math.min(maxStack(stack.id) - ts.count, stack.count); ts.count += n; stack.count -= n; if (stack.count <= 0) return true; } } for (const t of targets) { if (!this.canPlace(t, stack)) continue; if (!t.slots[t.index]) { t.slots[t.index] = { ...stack }; stack.count = 0; return true; } } return false; };
     if (ref.kind === 'inv' || ref.kind === 'hotbar') {
       const d = getItem(st.id); const armorSlots = containers.filter(c => c.kind === 'armor');
@@ -285,8 +290,8 @@ export class UI {
     this.afterChange(ref);
   }
   swapWithHotbar(ref, n) { if (ref.kind === 'creative') { const st = ref.slots[ref.index]; if (st) this.game.player.inventory.slots[n] = makeStack(st.id, maxStack(st.id)); this.refresh(); return; } if (ref.kind === 'craftOut' || ref.kind === 'furnaceOut') return; const inv = this.game.player.inventory; const a = ref.slots[ref.index], b = inv.slots[n]; if (b && !this.canPlace(ref, b)) return; ref.slots[ref.index] = b || null; inv.slots[n] = a || null; this.afterChange(ref); this.refresh(); }
-  dropFromSlot(ref, all) { const st = ref.slots[ref.index]; if (!st || ref.kind === 'creative' || ref.kind === 'craftOut') return; const n = all ? st.count : 1; this.game.dropStack({ id: st.id, count: n, dmg: st.dmg }); st.count -= n; if (st.count <= 0) ref.slots[ref.index] = null; this.afterChange(ref); this.refresh(); }
-  afterChange(ref) { if (ref.kind === 'craft') this.updateCraft(); if (ref.kind.startsWith('furnace')) { } this.game.world.markModified(this.game.player.x, this.game.player.z); if (this.screen.te) this.game.world.markModified(this.screen.te.x, this.screen.te.z); }
+  dropFromSlot(ref, all) { const st = ref.slots[ref.index]; if (!st || ref.kind === 'creative' || ref.kind === 'craftOut') return; const n = all ? st.count : 1; this.game.dropStack({ id: st.id, count: n, dmg: st.dmg, ench: st.ench }); st.count -= n; if (st.count <= 0) ref.slots[ref.index] = null; this.afterChange(ref); this.refresh(); }
+  afterChange(ref) { if (ref.kind === 'craft') this.updateCraft(); if (this.screen.update && (ref.kind.startsWith('anvil') || ref.kind.startsWith('enchant'))) this.screen.update(); if (ref.kind.startsWith('furnace')) { } this.game.world.markModified(this.game.player.x, this.game.player.z); if (this.screen.te) this.game.world.markModified(this.screen.te.x, this.screen.te.z); }
   // crafting
   updateCraft() { const s = this.screen; if (!s.craft) return; const r = findRecipe(s.craft.slots); s.craftOut[0] = r ? makeStack(r.id, r.count) : null; s.lastRecipe = r; }
   takeCraft(ref, shift) {
@@ -414,6 +419,55 @@ export class UI {
       const trash = [null]; side.appendChild(el('div', 'help-text', 'Delete')); this.addGrid(side, { slots: trash, offset: 0, count: 1, cols: 1, kind: 'trash', icons: ['🗑'] });
     });
   }
+  openEnchant(x, y, z) {
+    const g = this.game, p = g.player, w = g.world;
+    let shelves = 0; for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) for (let dy = 0; dy <= 1; dy++) if ((Math.abs(dx) === 2 || Math.abs(dz) === 2) && w.getBlock(x + dx, y + dy, z + dz) === B.bookshelf) shelves++;
+    shelves = Math.min(15, shelves);
+    const slots = [null, null];
+    this.openScreen('enchant', (box) => {
+      box.appendChild(el('h3', '', 'Enchant' + (shelves ? ` (${shelves} bookshelves)` : '')));
+      const lay = el('div', 'inv-layout'); lay.style.alignItems = 'center'; box.appendChild(lay);
+      const col = el('div', 'inv-section'); lay.appendChild(col);
+      this.addGrid(col, { slots, offset: 0, count: 1, cols: 1, kind: 'enchantItem' }); col.appendChild(el('div', 'help-text', 'Item'));
+      this.addGrid(col, { slots, offset: 1, count: 1, cols: 1, kind: 'enchantLapis' }); col.appendChild(el('div', 'help-text', 'Lapis'));
+      const opts = el('div', 'inv-section'); lay.appendChild(opts);
+      const btns = [];
+      for (let i = 0; i < 3; i++) { const b = el('button', 'mc-btn small', ''); b.style.minWidth = '220px'; opts.appendChild(b); btns.push(b); }
+      const seed = Math.random();
+      const render = () => {
+        const st = slots[0]; const d = st ? getItem(st.id) : null; const can = st && d && !isEnchanted(st) && applicable(d, st.id === I.book).length > 0;
+        for (let i = 0; i < 3; i++) { const maxCost = 5 + Math.round(shelves * 25 / 15); const cost = Math.max(i + 1, Math.round(maxCost * (i + 1) / 3)); const level = cost; const lapisNeed = i + 1; const ok = can && (p.creative || (p.level >= level && slots[1] && slots[1].id === I.lapis_lazuli && slots[1].count >= lapisNeed)); btns[i].textContent = can ? `Level ${level} · ${lapisNeed} lapis · ?` : '—'; btns[i].disabled = !ok; btns[i].onclick = () => { const ench = rollEnchantments(st, cost, Math.random); if (!ench) return; slots[0] = applyEnchant(st, ench); if (!p.creative) { p.setLevel(p.level - lapisNeed); slots[1].count -= lapisNeed; if (slots[1].count <= 0) slots[1] = null; } g.audio.play('levelup'); g.particles.emit(x + 0.5, y + 1.2, z + 0.5, 'portal', 12); this.refresh(); }; }
+      };
+      this.screen.update = render; render();
+      this.addPlayerInventory(box);
+      this.screen.onClose = () => { for (const s of slots) if (s) p.give(s); };
+      box.appendChild(el('div', 'help-text', 'Surround the table with bookshelves (up to 15) for stronger enchantments'));
+    });
+  }
+  openAnvil(x, y, z) {
+    const g = this.game, p = g.player; const slots = [null, null]; const out = [null];
+    this.openScreen('anvil', (box) => {
+      box.appendChild(el('h3', '', 'Repair & Name'));
+      const lay = el('div', 'inv-layout'); lay.style.alignItems = 'center'; box.appendChild(lay);
+      this.addGrid(lay, { slots, offset: 0, count: 1, cols: 1, kind: 'anvilA' }); lay.appendChild(el('span', '', '+')); this.addGrid(lay, { slots, offset: 1, count: 1, cols: 1, kind: 'anvilB' }); lay.appendChild(el('div', 'arrow'));
+      this.addGrid(lay, { slots: out, offset: 0, count: 1, cols: 1, kind: 'anvilOut' });
+      const costEl = el('div', 'help-text', ''); box.appendChild(costEl);
+      this.screen.anvil = { slots, out, costEl };
+      this.screen.update = () => { const r = anvilResult(slots[0], slots[1]); out[0] = r ? r.result : null; this.screen.anvilCost = r ? r.cost : 0; costEl.textContent = r ? `Enchantment cost: ${r.cost} level${r.cost > 1 ? 's' : ''}` + (p.level < r.cost && !p.creative ? ' (not enough levels)' : '') : 'Combine two of the same item, an item with its material, or an item with an enchanted book'; costEl.style.color = r && p.level < r.cost && !p.creative ? '#c00' : ''; for (const ref of this.screen.slots) if (ref.kind === 'anvilOut') this.renderSlot(ref.el, out[0], false); };
+      this.screen.update();
+      this.addPlayerInventory(box);
+      this.screen.onClose = () => { for (const s of slots) if (s) p.give(s); };
+    });
+  }
+  takeAnvil(shift) {
+    const s = this.screen; const p = this.game.player; const r = anvilResult(s.anvil.slots[0], s.anvil.slots[1]); if (!r) return;
+    if (!p.creative && p.level < r.cost) return;
+    if (this.cursor && !shift) return;
+    const res = { ...r.result }; const used = res._used; delete res._used;
+    if (shift) p.give(res); else this.cursor = res;
+    s.anvil.slots[0] = null; if (used && s.anvil.slots[1]) { s.anvil.slots[1].count -= used; if (s.anvil.slots[1].count <= 0) s.anvil.slots[1] = null; } else s.anvil.slots[1] = null;
+    if (!p.creative) p.setLevel(p.level - r.cost); this.game.audio.play('anvil'); this.refresh();
+  }
   openTrade(villager) {
     const g = this.game, p = g.player;
     if (!villager.trades) villager.trades = makeTrades();
@@ -425,7 +479,7 @@ export class UI {
         for (const t of villager.trades) {
           const row = el('div', 'trade'); const a = el('div', 'slot'); this.renderSlot(a, makeStack(t.in, t.inN), false); row.appendChild(a); row.appendChild(el('span', '', '→')); const b = el('div', 'slot'); this.renderSlot(b, makeStack(t.out, t.outN), false); row.appendChild(b);
           const can = p.inventory.count(t.in) >= t.inN && t.uses < 8; if (!can) row.classList.add('disabled');
-          const btn = el('button', 'mc-btn', can ? 'Trade' : t.uses >= 8 ? 'Sold out' : 'Need ' + t.inN + ' ' + itemName(t.in)); btn.disabled = !can; btn.onclick = () => { p.inventory.remove(t.in, t.inN); p.give(makeStack(t.out, t.outN)); t.uses++; g.audio.play('villager'); g.entities.spawnXP(villager.x, villager.y + 1, villager.z, 2); render(); }; row.appendChild(btn); list.appendChild(row);
+          const btn = el('button', 'mc-btn', can ? 'Trade' : t.uses >= 8 ? 'Sold out' : 'Need ' + t.inN + ' ' + itemName(t.in)); btn.disabled = !can; btn.onclick = () => { p.inventory.remove(t.in, t.inN); const outStack = makeStack(t.out, t.outN); if (t.out === I.enchanted_book) outStack.ench = rollEnchantments({ id: I.book }, 15 + Math.floor(Math.random() * 15)); p.give(outStack); t.uses++; g.audio.play('villager'); g.entities.spawnXP(villager.x, villager.y + 1, villager.z, 2); render(); }; row.appendChild(btn); list.appendChild(row);
         }
       };
       render();

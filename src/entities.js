@@ -360,7 +360,8 @@ export class Mob extends Entity {
     const g = this.game; this.dead = true; this.health = 0;
     g.playSoundAt('death', this.x, this.y, this.z, { volume: 0.6 });
     const playerKill = source === g.player || (source && source.owner === 'player') || (source && source.shooter === g.player);
-    if (!(this.def.villager)) for (const [item, min, max, chance] of this.def.drops) { if (Math.random() > chance) continue; const n = min + Math.floor(Math.random() * (max - min + 1)) + (playerKill && Math.random() < 0.3 ? 1 : 0); if (n > 0) { let id; try { id = resolveId(item); } catch { continue; } if (this.fire > 0 && item === 'beef') id = I.cooked_beef; if (this.fire > 0 && item === 'porkchop') id = I.cooked_porkchop; if (this.fire > 0 && item === 'chicken') id = I.cooked_chicken; g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(id, n), true); } }
+    const loot = playerKill ? (this.looting || 0) : 0;
+    if (!(this.def.villager)) for (const [item, min, max, chance] of this.def.drops) { if (Math.random() > Math.min(1, chance + loot * 0.05)) continue; const n = min + Math.floor(Math.random() * (max - min + 1 + loot)) + (playerKill && Math.random() < 0.3 ? 1 : 0); if (n > 0) { let id; try { id = resolveId(item); } catch { continue; } if (this.fire > 0 && item === 'beef') id = I.cooked_beef; if (this.fire > 0 && item === 'porkchop') id = I.cooked_porkchop; if (this.fire > 0 && item === 'chicken') id = I.cooked_chicken; g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(id, n), true); } }
     if (this.type === 'sheep' && !this.sheared) g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(this.woolId(), 1), true);
     if (playerKill && this.def.xp) g.entities.spawnXP(this.x, this.y + 0.5, this.z, this.def.xp);
     if (this.type === 'slime' && this.size > 1) for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) g.entities.spawnMob('slime', this.x + Math.random() - 0.5, this.y, this.z + Math.random() - 0.5, { size: this.size - 1 });
@@ -427,7 +428,7 @@ export class ItemEntity extends Entity {
       else if (d < 3) { this.vx += (p.x - this.x) / d * dt * 6; this.vz += (p.z - this.z) / d * dt * 6; }
     }
     // merge with nearby same items
-    if (this.pickupDelay <= 0 && this.age % 1 < dt) for (const e of this.game.entities.list) if (e !== this && e instanceof ItemEntity && !e.removed && e.stack.id === this.stack.id && (e.stack.dmg || 0) === (this.stack.dmg || 0) && this.distTo(e) < 0.8 && e.stack.count + this.stack.count <= maxStack(this.stack.id)) { this.stack.count += e.stack.count; e.remove(); }
+    if (this.pickupDelay <= 0 && this.age % 1 < dt) for (const e of this.game.entities.list) if (e !== this && e instanceof ItemEntity && !e.removed && e.stack.id === this.stack.id && (e.stack.dmg || 0) === (this.stack.dmg || 0) && !e.stack.ench && !this.stack.ench && this.distTo(e) < 0.8 && e.stack.count + this.stack.count <= maxStack(this.stack.id)) { this.stack.count += e.stack.count; e.remove(); }
     if (this.obj) { this.spin += dt * 2; this.obj.position.set(this.x, this.y + 0.15 + Math.sin(this.age * 3) * 0.05, this.z); this.obj.rotation.y = this.spin; this.updateLight(); }
   }
   serialize() { return { type: 'item', x: this.x, y: this.y, z: this.z, stack: this.stack }; }
@@ -454,6 +455,7 @@ export class Projectile extends Entity {
     if (!this.noGravity) this.vy -= (this.kind === 'arrow' ? 20 : 25) * dt;
     const r = moveEntity(g.world, this, this.vx * dt, this.vy * dt, this.vz * dt);
     if (this.kind === 'fireball') g.particles.emit(this.x, this.y + this.h / 2, this.z, 'smoke', 1);
+    if (this.flaming && Math.random() < 0.5) g.particles.emit(this.x, this.y + this.h / 2, this.z, 'flame', 1);
     // hit entities
     const hitE = g.entities.hitTest(this.x, this.y, this.z, this.w, this.shooter);
     if (hitE || (g.player !== this.shooter && !g.player.dead && Math.hypot(g.player.x - this.x, g.player.y + 0.9 - this.y, g.player.z - this.z) < 0.7 && g.player.gamemode !== 'spectator')) {
@@ -475,7 +477,7 @@ export class Projectile extends Entity {
     if (this.kind === 'arrow' || this.kind === 'fireball' || this.kind === 'potion') {
       let dmg = this.damage; if (this.kind === 'fireball') dmg = 6;
       if (target === g.player) { if (this.kind === 'potion') { g.player.effects.poison = 8; } else g.hurtPlayer(dmg, this.shooter || this); if (this.kind === 'fireball') g.player.fire = 5; }
-      else if (target.hurt) { target.hurt(dmg, this.shooter || this, 0.4); if (this.kind === 'fireball') target.fire = 5; if (this.shooter === g.player) { g.player.lastTarget = target; g.player.lastTargetT = g.time; } }
+      else if (target.hurt) { target.hurt(dmg, this.shooter || this, 0.4 + (this.punch || 0) * 0.5); if (this.kind === 'fireball' || this.flaming) target.fire = 5; if (this.shooter === g.player) { g.player.lastTarget = target; g.player.lastTargetT = g.time; } }
       if (this.kind === 'fireball' && this.opts.power) g.explode(this.x, this.y, this.z, this.opts.power, this.shooter, true);
     } else if (this.kind === 'ender_pearl') { if (this.shooter === g.player) { g.player.x = this.x; g.player.y = this.y; g.player.z = this.z; g.hurtPlayer(5, null, true); } }
     else { if (target.hurt) target.hurt(this.kind === 'snowball' && target.type === 'blaze' ? 3 : 0, this.shooter, 0.3); }
@@ -534,7 +536,7 @@ export class EntityManager {
   constructor(game) { this.game = game; this.list = []; this.spawnT = 0; this.passiveT = 0; }
   add(e) { this.list.push(e); return e; }
   spawnMob(type, x, y, z, extra = {}) { if (!MOBS[type]) return null; const m = new Mob(this.game, type, x, y, z, extra); if (type === 'sheep' && !extra.color) { const r = Math.random(); m.colorName = r < 0.82 ? 'white' : r < 0.88 ? 'black' : r < 0.93 ? 'gray' : r < 0.98 ? 'light_gray' : 'pink'; m.color = this.game.consts.COLOR_HEX[m.colorName]; m.buildModel(); } if (extra.colorName) { m.colorName = extra.colorName; } if (type === 'horse' && !extra.color) { m.color = [0x8a5a30, 0xc0a070, 0x3a2a1a, 0xd8d8d8, 0x6a4a2a][Math.floor(Math.random() * 5)]; m.buildModel(); } if (type === 'cat' && !extra.color) { m.color = [0xd0a050, 0x303030, 0xe8e8e8, 0x8a6a4a][Math.floor(Math.random() * 4)]; m.buildModel(); } return this.add(m); }
-  dropItem(x, y, z, stack, scatter = false, vel = null) { if (!stack || stack.count <= 0) return null; const e = new ItemEntity(this.game, x, y, z, { id: stack.id, count: stack.count, dmg: stack.dmg || 0 }); if (scatter) { e.vx = (Math.random() - 0.5) * 3; e.vy = 3 + Math.random() * 2; e.vz = (Math.random() - 0.5) * 3; } if (vel) { e.vx = vel[0]; e.vy = vel[1]; e.vz = vel[2]; e.pickupDelay = 1.5; } return this.add(e); }
+  dropItem(x, y, z, stack, scatter = false, vel = null) { if (!stack || stack.count <= 0) return null; const st = { id: stack.id, count: stack.count, dmg: stack.dmg || 0 }; if (stack.ench) st.ench = { ...stack.ench }; const e = new ItemEntity(this.game, x, y, z, st); if (scatter) { e.vx = (Math.random() - 0.5) * 3; e.vy = 3 + Math.random() * 2; e.vz = (Math.random() - 0.5) * 3; } if (vel) { e.vx = vel[0]; e.vy = vel[1]; e.vz = vel[2]; e.pickupDelay = 1.5; } return this.add(e); }
   spawnXP(x, y, z, amount) { while (amount > 0) { const v = amount >= 37 ? 37 : amount >= 17 ? 17 : amount >= 7 ? 7 : amount >= 3 ? 3 : 1; amount -= v; this.add(new XPOrb(this.game, x, y, z, v)); } }
   spawnArrow(shooter, target, speed = 1, damage = 2) { const sx = shooter.x, sy = shooter.y + (shooter.h || 1.8) * 0.85, sz = shooter.z; let dx, dy, dz; if (target) { dx = target.x - sx; dy = target.y + (target.h || 1.8) * 0.5 - sy; dz = target.z - sz; const d = Math.hypot(dx, dz); dy += d * 0.08; } else { dx = -Math.sin(shooter.yaw) * Math.cos(shooter.pitch); dy = Math.sin(shooter.pitch); dz = -Math.cos(shooter.yaw) * Math.cos(shooter.pitch); } const d = Math.hypot(dx, dy, dz) || 1; const v = 28 * speed; return this.add(new Projectile(this.game, 'arrow', sx + dx / d * 0.5, sy, sz + dz / d * 0.5, dx / d * v, dy / d * v, dz / d * v, shooter, { damage })); }
   spawnFireball(shooter, target, size) { const sx = shooter.x, sy = shooter.y + shooter.h * 0.6, sz = shooter.z; const dx = target.x - sx, dy = target.y + 1 - sy, dz = target.z - sz; const d = Math.hypot(dx, dy, dz) || 1; const v = 14; return this.add(new Projectile(this.game, 'fireball', sx + dx / d * 2, sy, sz + dz / d * 2, dx / d * v, dy / d * v, dz / d * v, shooter, { size, power: shooter.type === 'blaze' ? 0 : size > 1 ? 1.5 : 1 })); }

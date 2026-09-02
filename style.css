@@ -129,3 +129,22 @@ input[type=range] { width: 100%; }
 .help-text { font-size: 12px; color: #555; margin-top: 8px; }
 .stats-list { text-align: left; font-size: 13px; color: #ddd; background: rgba(0,0,0,0.4); padding: 8px; margin: 8px auto; max-width: 300px; }
 @media (max-width: 700px) { :root { --slot: 36px; } .slot canvas { width: 30px; height: 30px; } #chat { width: 70vw; } }
+
+/* enchant glint */
+.slot canvas.glint { filter: drop-shadow(0 0 3px #d070ff) saturate(1.3); }
+#tooltip .ench { color: #b0b0ff; }
+
+/* ---------- Touch controls ---------- */
+#touch { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+#joy { position: absolute; left: 24px; bottom: 120px; width: 130px; height: 130px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.4); pointer-events: auto; touch-action: none; }
+#joy-knob { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.55); pointer-events: none; }
+.tbtn { position: absolute; width: 64px; height: 64px; border-radius: 12px; background: rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.5); color: #fff; font-size: 26px; display: flex; align-items: center; justify-content: center; pointer-events: auto; touch-action: none; user-select: none; }
+.tbtn.on { background: rgba(255,255,255,0.45); color: #000; }
+.tbtn.small { width: 46px; height: 46px; font-size: 20px; }
+#tb-jump { right: 28px; bottom: 150px; }
+#tb-sneak { right: 110px; bottom: 120px; }
+#tb-inv { right: 12px; top: 12px; }
+#tb-chat { right: 66px; top: 12px; }
+#tb-drop { right: 120px; top: 12px; }
+#tb-cam { right: 174px; top: 12px; }
+@media (pointer: coarse) { #status { bottom: 4px; } }

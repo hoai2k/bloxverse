@@ -234,7 +234,7 @@ reg('glass_pane', { render: 'box', opaque: false, cutout: true, tex: 'glass', ha
   if (c(ctx.get(0, 0, 1))) boxes.push([7 / 16, 0, 9 / 16, 9 / 16, 1, 1]); if (c(ctx.get(0, 0, -1))) boxes.push([7 / 16, 0, 0, 9 / 16, 1, 7 / 16]); return boxes; }, fence: true, drops: () => [] });
 reg('bed', { render: 'box', opaque: false, tex: (m) => ({ top: (m & 4) ? 'bed_head' : 'bed_foot', bottom: 'oak_planks', side: 'bed_side', facing: m & 3 }), hardness: 0.2, sound: 'cloth', shape: () => [[0, 0, 0, 1, 9 / 16, 1]], bed: true, interact: 'bed', tab: 'functional',
   drops: (m) => (m & 4) ? [] : [{ id: B.bed, count: 1 }] });
-reg('enchanting_table', { render: 'box', opaque: false, tex: { top: 'enchanting_table_top', bottom: 'obsidian', side: 'enchanting_table_side' }, hardness: 5, tool: 'pickaxe', needsTool: true, shape: () => [[0, 0, 0, 1, 0.75, 1]], light: 7, tab: 'functional' });
+reg('enchanting_table', { render: 'box', opaque: false, tex: { top: 'enchanting_table_top', bottom: 'obsidian', side: 'enchanting_table_side' }, hardness: 5, tool: 'pickaxe', needsTool: true, shape: () => [[0, 0, 0, 1, 0.75, 1]], light: 7, tab: 'functional', interact: 'enchant' });
 reg('jack_o_lantern', { tex: (m) => ({ top: 'pumpkin_top', bottom: 'pumpkin_top', side: 'pumpkin_side', front: 'jack_o_lantern_front', facing: m & 3 }), light: 15, hardness: 1, tool: 'axe', sound: 'wood', facingPlace: true, tab: 'functional' });
 reg('lantern', { render: 'box', opaque: false, cutout: true, solid: true, light: 15, hardness: 3.5, tool: 'pickaxe', sound: 'metal', shape: () => [[5 / 16, 0, 5 / 16, 11 / 16, 9 / 16, 11 / 16]], tab: 'functional' });
 reg('sea_lantern', { light: 15, hardness: 0.3, sound: 'glass', tab: 'functional' });
@@ -325,7 +325,7 @@ reg('large_fern', { render: 'cross', solid: false, opaque: false, hardness: 0, s
 reg('nether_wart', { render: 'cross', solid: false, opaque: false, hardness: 0, sound: 'grass', hidden: true, crop: true, stages: 4, tex: (m) => `nether_wart_stage${Math.min(3, m & 3)}`, randomTick: true, tab: 'nature', soil: 'soul_sand',
   drops: (m, t, r) => (m & 3) >= 3 ? [{ id: 'nether_wart', count: 2 + Math.floor(r() * 3) }] : [{ id: 'nether_wart', count: 1 }] });
 reg('brewing_stand', { render: 'box', opaque: false, cutout: true, hardness: 0.5, tool: 'pickaxe', needsTool: true, shape: () => [[7 / 16, 0, 7 / 16, 9 / 16, 14 / 16, 9 / 16]], light: 1, tab: 'functional' });
-reg('anvil', { render: 'box', opaque: false, tex: { top: 'anvil_top', bottom: 'anvil_base', side: 'anvil_side' }, hardness: 5, tool: 'pickaxe', needsTool: true, shape: () => [[2 / 16, 0, 2 / 16, 14 / 16, 1, 14 / 16]], sound: 'metal', gravity: true, tab: 'functional' });
+reg('anvil', { render: 'box', opaque: false, tex: { top: 'anvil_top', bottom: 'anvil_base', side: 'anvil_side' }, hardness: 5, tool: 'pickaxe', needsTool: true, shape: () => [[2 / 16, 0, 2 / 16, 14 / 16, 1, 14 / 16]], sound: 'metal', gravity: true, tab: 'functional', interact: 'anvil' });
 reg('beacon', { translucent: true, cullSame: true, opaque: false, hardness: 3, light: 15, sound: 'glass', tab: 'functional' });
 reg('mud', { hardness: 0.5, tool: 'shovel', sound: 'gravel', render: 'box', opaque: false, shape: () => [[0, 0, 0, 1, 14 / 16, 1]], tab: 'nature' });
 reg('rooted_dirt', { hardness: 0.5, tool: 'shovel', sound: 'gravel', tab: 'nature' });
