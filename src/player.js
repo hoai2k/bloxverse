@@ -47,6 +47,7 @@ export class Player {
     const g = this.game, w = this.world = g.world, inp = g.input;
     this.hurtTimer = Math.max(0, this.hurtTimer - dt); this.attackCd = Math.max(0, this.attackCd - dt); this.useCd = Math.max(0, this.useCd - dt); this.jumpCd = Math.max(0, this.jumpCd - dt); this.breakCd = Math.max(0, this.breakCd - dt);
     if (this.dead) return;
+    if (!Number.isFinite(this.x + this.y + this.z + this.yaw + this.pitch)) { console.warn('player state invalid, resetting'); if (!Number.isFinite(this.yaw)) this.yaw = 0; if (!Number.isFinite(this.pitch)) this.pitch = 0; if (!Number.isFinite(this.x + this.y + this.z)) { const sp = this.bedSpawn || this.spawn || { x: 0.5, y: 80, z: 0.5 }; this.x = sp.x; this.y = sp.y; this.z = sp.z; } this.vx = this.vy = this.vz = 0; }
     if (this.sleeping) { this.sleepT += dt; return; }
     const uiOpen = g.ui.screenOpen;
     const fwd = !uiOpen && inp.key('KeyW') - (!uiOpen && inp.key('KeyS')), strafe = !uiOpen && inp.key('KeyD') - (!uiOpen && inp.key('KeyA'));
@@ -124,7 +125,7 @@ export class Player {
       const belowId = w.getBlock(Math.floor(this.x), Math.floor(this.y - 0.05), Math.floor(this.z));
       if (this.onGround && BLOCKS[belowId].slippery && !moving) { const f = Math.pow(0.98, dt * 20); this.vx /= Math.pow(0.5, dt * 20); this.vz /= Math.pow(0.5, dt * 20); this.vx *= f; this.vz *= f; }
       this.vy -= GRAVITY * dt; this.vy = Math.max(this.vy, -78);
-      if (jump && this.onGround && this.jumpCd <= 0) { this.vy = 8.4 + (BLOCKS[blockAt].name === 'honey_block' ? -4 : 0); this.jumpCd = 0.25; if (this.sprinting) { this.vx += mx * 2; this.vz += mz * 2; } this.exhaustion += this.sprinting ? 0.2 : 0.05; this.onGround = false; }
+      if (jump && this.onGround && this.jumpCd <= 0) { this.vy = 9.2 + (BLOCKS[blockAt].name === 'honey_block' ? -4 : 0); this.jumpCd = 0.25; if (this.sprinting) { this.vx += mx * 2; this.vz += mz * 2; } this.exhaustion += this.sprinting ? 0.2 : 0.05; this.onGround = false; }
       if (jump && !this.onGround && this.vy < 0 && !this.gliding && this.hasElytra() && !this._jumpHeldGlide) { this.gliding = true; this._jumpHeldGlide = true; }
       if (!jump) this._jumpHeldGlide = false;
       const ox = this.x, oz = this.z;
@@ -134,6 +135,10 @@ export class Player {
       if (r.hitY) { if (this.vy < 0 && BLOCKS[belowId].bouncy && !sneakKey && this.vy < -6) { this.vy = -this.vy * 0.8; } else this.vy = 0; }
       if (r.hitX) this.vx = 0; if (r.hitZ) this.vz = 0;
       const wasOnGround = this.onGround; this.onGround = r.onGround;
+      if ((r.hitX || r.hitZ) && this.onGround && moving && g.settings.autoJump !== false && this.jumpCd <= 0 && !this.sneaking) {
+        const ax = Math.floor(this.x + mx * 0.7), az = Math.floor(this.z + mz * 0.7), ay = Math.floor(this.y + 0.1);
+        if (BLOCKS[w.getBlock(ax, ay, az)].solid && !BLOCKS[w.getBlock(ax, ay + 1, az)].solid && !BLOCKS[w.getBlock(ax, ay + 2, az)].solid && !BLOCKS[w.getBlock(Math.floor(this.x), ay + 2, Math.floor(this.z))].solid) { this.vy = 9.4; this.vx = mx * speed * 0.9; this.vz = mz * speed * 0.9; this.jumpCd = 0.35; this.onGround = false; this.fallStart = this.y; }
+      }
       if (!this.onGround && this.fallStart === null && this.vy < 0) this.fallStart = this.y + (wasOnGround ? 0 : 0);
       if (this.vy > 0) this.fallStart = Math.max(this.fallStart ?? this.y, this.y);
       if (this.onGround && this.fallStart !== null) {

@@ -465,6 +465,7 @@ export function buildOptions(body, settings, onChange, game = null) {
   slider('Mouse Sensitivity', 'sensitivity', 0.1, 2, 0.05, v => Math.round(v * 100) + '%');
   slider('Sound Volume', 'volume', 0, 1, 0.05, v => Math.round(v * 100) + '%');
   slider('Music Volume', 'music', 0, 1, 0.05, v => Math.round(v * 100) + '%');
+  toggle('Auto-Jump', 'autoJump');
   toggle('Show FPS', 'showFps');
   toggle('Fancy Graphics (clouds, rain)', 'fancyGraphics');
   if (game) {

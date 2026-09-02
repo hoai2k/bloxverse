@@ -19,7 +19,7 @@ export class Audio {
   play(name, opts = {}) {
     if (!this.enabled || !this.ctx) return; if (this.ctx.state === 'suspended') this.ctx.resume();
     const vol = (opts.volume ?? 1);
-    const dist = opts.dist ?? 0; const att = Math.max(0, 1 - dist / 24); if (att <= 0) return;
+    const dist = Number.isFinite(opts.dist) ? opts.dist : 0; const att = Math.max(0, 1 - dist / 24); if (att <= 0) return;
     const g = vol * att;
     switch (name) {
       case 'step_stone': this.noise(0.08, 900 + Math.random() * 300, 1, 0.25 * g); break;

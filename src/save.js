@@ -56,6 +56,6 @@ export const SaveStore = {
 };
 
 export const Settings = {
-  load() { try { return Object.assign({ renderDistance: 6, fov: 70, sensitivity: 0.5, volume: 0.6, music: 0.3, showFps: false, fancyGraphics: true, autoJump: false }, JSON.parse(localStorage.getItem('craftverse.settings') || '{}')); } catch { return { renderDistance: 6, fov: 70, sensitivity: 0.5, volume: 0.6, music: 0.3 }; } },
+  load() { try { return Object.assign({ renderDistance: 6, fov: 70, sensitivity: 0.5, volume: 0.6, music: 0.3, showFps: false, fancyGraphics: true, autoJump: true }, JSON.parse(localStorage.getItem('craftverse.settings') || '{}')); } catch { return { renderDistance: 6, fov: 70, sensitivity: 0.5, volume: 0.6, music: 0.3 }; } },
   save(s) { try { localStorage.setItem('craftverse.settings', JSON.stringify(s)); } catch { } },
 };
