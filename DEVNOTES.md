@@ -39,6 +39,9 @@ survival HUD, creative inventory, mining, commands, crafting, furnace, mob spawn
 - No multiplayer, no redstone circuits, no enchanting/brewing UI (blocks are decorative), no boats/minecarts/riding.
 - Touch controls not implemented.
 - Mesher/lighting run on the main thread (≈9 ms/chunk each); moving them to workers would smooth chunk loading.
+- Chunk pipeline uses square rings: generate ≤ R+2, light ≤ R+1, mesh ≤ R (so the full render distance is meshed).
+- Headless testing: the software rasterizer is slow at 1280×720; use an 800×450 viewport and `&rd=3` for tests.
+- Title screen is static (no live panorama yet).
 
 ## Testing
 Headless scripts live in the session scratchpad (`test.js`, `test2.js`, `prof.mjs`); they launch `/opt/pw-browsers/chromium-1194`

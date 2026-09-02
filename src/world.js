@@ -186,13 +186,13 @@ export class World {
       this._lastCx = pcx; this._lastCz = pcz;
       // ordering by distance
       const order = [];
-      for (let dx = -R - 1; dx <= R + 1; dx++) for (let dz = -R - 1; dz <= R + 1; dz++) { const d = dx * dx + dz * dz; if (d <= (R + 1) * (R + 1)) order.push([dx, dz, d]); }
+      for (let dx = -R - 2; dx <= R + 2; dx++) for (let dz = -R - 2; dz <= R + 2; dz++) { const d = dx * dx + dz * dz; order.push([dx, dz, d, Math.max(Math.abs(dx), Math.abs(dz))]); }
       order.sort((a, b) => a[2] - b[2]);
       this._order = order;
       // unload far chunks
       for (const c of this.chunks.values()) {
         const dx = c.cx - pcx, dz = c.cz - pcz;
-        if (dx * dx + dz * dz > (R + 3) * (R + 3)) this.unloadChunk(c);
+        if (Math.max(Math.abs(dx), Math.abs(dz)) > R + 4) this.unloadChunk(c);
       }
       // request missing
       for (const [dx, dz] of order) {
@@ -205,9 +205,9 @@ export class World {
     let did = 0;
     while (this.pendingResults.length && performance.now() - t0 < budgetMs) { this.integrate(this.pendingResults.shift()); did++; }
     // lighting for generated chunks whose neighbours are generated (nearest first)
-    for (const [dx, dz, d] of this._order) {
+    for (const [dx, dz, d, ch] of this._order) {
       if (performance.now() - t0 > budgetMs) break;
-      if (d > R * R) break;
+      if (ch > R + 1) continue;
       const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 1) continue;
       if (!this.neighborsAtLeast(c, 1)) continue;
       this.lighting.initChunk(c); c.state = 2;
@@ -216,9 +216,9 @@ export class World {
       if (this.onChunkReady) this.onChunkReady(c);
     }
     // meshing: new chunks nearest first, then dirty re-meshes
-    for (const [dx, dz, d] of this._order) {
+    for (const [dx, dz, d, ch] of this._order) {
       if (performance.now() - t0 > budgetMs) break;
-      if (d > R * R) break;
+      if (ch > R) continue;
       const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 2) continue;
       if (!this.neighborsAtLeast(c, 2)) continue;
       this.remesh(c); c.state = 3;
