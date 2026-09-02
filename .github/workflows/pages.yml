@@ -1,10 +1,10 @@
-name: Deploy Bloxverse to GitHub Pages
+name: Deploy Craftverse to GitHub Pages
 
 on:
   push:
     branches:
       - main
-      - claude/roblox-clone-ai-players-zx6mfl
+      - claude/minecraft-clone-browser-3bbj9c
   workflow_dispatch: {}
 
 permissions:

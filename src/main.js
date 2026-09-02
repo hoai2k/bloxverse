@@ -57,4 +57,4 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && gam
 showPage('main');
 window.CV = { B, I, BLOCKS, ITEMS, SaveStore, playWorld, settings };
 // Allow ?world=<name> quick start for testing: creates a throwaway creative world
-if (location.search.includes('quick')) { const params = new URLSearchParams(location.search); playWorld({ id: 'quick', name: 'Quick World', seed: parseInt(params.get('seed')) || 12345, gamemode: params.get('mode') || 'creative', difficulty: 2, worldType: params.get('type') || 'default', cheats: true, created: Date.now(), time: parseInt(params.get('time')) || 1000, dim: parseInt(params.get('dim')) || 0 }); }
+if (location.search.includes('quick')) { const params = new URLSearchParams(location.search); if (params.get('rd')) settings.renderDistance = parseInt(params.get('rd')); playWorld({ id: 'quick', name: 'Quick World', seed: parseInt(params.get('seed')) || 12345, gamemode: params.get('mode') || 'creative', difficulty: 2, worldType: params.get('type') || 'default', cheats: true, created: Date.now(), time: parseInt(params.get('time')) || 1000, dim: parseInt(params.get('dim')) || 0 }); }

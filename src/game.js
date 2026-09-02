@@ -206,7 +206,7 @@ export class Game {
     cam.position.set(ex + d[0] * back * dd, ey + d[1] * back * dd, ez + d[2] * back * dd);
     if (this.thirdPerson === 2) cam.rotation.set(-p.pitch, p.yaw + Math.PI, 0);
     if (!this.playerModel) { this.playerModel = humanoidModel({ skin: 0xd9a58a, hair: 0x4a2f1a, shirt: 0x2fb5c9, pants: 0x3c3a8f, sleeve: 0xd9a58a }, { key: 'player', face: (ctx) => { ctx.fillStyle = '#4a2f1a'; ctx.fillRect(0, 0, 16, 3); ctx.fillStyle = '#fff'; ctx.fillRect(3, 6, 4, 2); ctx.fillRect(9, 6, 4, 2); ctx.fillStyle = '#3a4a8a'; ctx.fillRect(5, 6, 2, 2); ctx.fillRect(9, 6, 2, 2); ctx.fillStyle = '#a06050'; ctx.fillRect(6, 11, 4, 2); } }); this.renderer.scene.add(this.playerModel); }
-    const m = this.playerModel; m.visible = !p.dead && !p.spectator; m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw; m.userData.head.rotation.x = -p.pitch;
+    const m = this.playerModel; m.visible = !p.dead && !p.spectator && dd > 1.1; m.position.set(p.x, p.y, p.z); m.rotation.y = p.yaw; m.userData.head.rotation.x = -p.pitch;
     const sp = Math.hypot(p.vx, p.vz); this.animT = (this.animT || 0) + (sp > 0.3 ? sp * 4 : 0) * 0.016; const sw = Math.sin(this.animT) * Math.min(1, sp / 3) * 0.8;
     m.userData.legs.forEach((l, i) => l.rotation.x = i ? -sw : sw); m.userData.arms.forEach((a, i) => a.rotation.x = i ? sw : -sw);
     const l = this.world.getLightLevel(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z), this.sunLevel) / 15; m.traverse(o => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach(mm => { if (!mm.userData.base) mm.userData.base = mm.color.clone(); mm.color.copy(mm.userData.base).multiplyScalar(0.2 + 0.8 * l); }); });

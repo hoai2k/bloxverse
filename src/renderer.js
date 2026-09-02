@@ -268,10 +268,10 @@ export class Renderer {
 
   // ---------- weather ----------
   buildRain() {
-    const N = 900; this.rainN = N;
+    const N = 2400; this.rainN = N;
     const g = new THREE.BufferGeometry(); const pos = new Float32Array(N * 6);
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.rainMat = new THREE.LineBasicMaterial({ color: 0x9fb8e8, transparent: true, opacity: 0.55 });
+    this.rainMat = new THREE.LineBasicMaterial({ color: 0x6f8fd0, transparent: true, opacity: 0.7 });
     this.rain = new THREE.LineSegments(g, this.rainMat); this.rain.visible = false; this.rain.frustumCulled = false; this.scene.add(this.rain);
     this.rainDrops = new Float32Array(N * 4); // x,y,z,speed
     for (let i = 0; i < N; i++) this.rainDrops[i * 4 + 3] = 0;
@@ -279,8 +279,8 @@ export class Renderer {
   updateRain(dt, camPos, world, snow) {
     const intensity = this.weather.rain; this.rain.visible = intensity > 0.02;
     if (!this.rain.visible) return;
-    const pos = this.rain.geometry.attributes.position.array; const d = this.rainDrops; const R = 14;
-    const len = snow ? 0.12 : 0.9; this.rainMat.color.set(snow ? 0xffffff : 0x9fb8e8); this.rainMat.opacity = snow ? 0.9 : 0.5 * intensity;
+    const pos = this.rain.geometry.attributes.position.array; const d = this.rainDrops; const R = 12;
+    const len = snow ? 0.12 : 1.3; this.rainMat.color.set(snow ? 0xffffff : 0x9fb8e8); this.rainMat.opacity = snow ? 0.9 : 0.5 * intensity;
     const active = Math.floor(this.rainN * intensity);
     for (let i = 0; i < this.rainN; i++) {
       if (i >= active) { pos[i * 6 + 1] = -1000; pos[i * 6 + 4] = -1000; continue; }
