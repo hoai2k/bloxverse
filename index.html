@@ -16,9 +16,11 @@
   <div class="menu-inner">
     <h1 class="logo">CRAFTVERSE</h1>
     <div class="splash">Blocks all the way down!</div>
+    <div id="update-banner" hidden><span class="ub-label">Update</span><span class="ub-name"></span><span class="ub-ver"></span></div>
     <div id="menu-main" class="menu-page">
       <button class="mc-btn big" data-page="worlds">Singleplayer</button>
       <button class="mc-btn big" data-page="options">Options</button>
+      <button class="mc-btn big" data-page="updatelog">Update Log</button>
       <button class="mc-btn big" data-page="about">About</button>
     </div>
     <div id="menu-worlds" class="menu-page" hidden>
@@ -59,49 +61,38 @@
       <div id="options-body"></div>
       <div class="row"><button class="mc-btn" data-page="main">Done</button></div>
     </div>
+    <div id="menu-updatelog" class="menu-page" hidden>
+      <h2>Update Log</h2>
+      <div id="changelog" class="changelog"></div>
+      <div class="row"><button class="mc-btn" data-page="main">Back</button></div>
+    </div>
     <div id="menu-about" class="menu-page" hidden>
       <h2>About</h2>
       <p class="about">A browser voxel sandbox inspired by the block game everyone knows. Survival, Creative, Hardcore, Adventure and Spectator modes; three dimensions; biomes, caves, ores, villages, mobs, farming, crafting, smelting, weather, day/night and more. Everything, including all textures and sounds, is generated in code at runtime — no assets, no build step.</p>
       <p class="about small">Controls: WASD move · Space jump · Shift sneak · Ctrl/double-W sprint · E inventory · Q drop · T chat · / command · F3 debug · F5 view · Esc pause · 1-9 hotbar · scroll to select · F fishing... just kidding, F swaps to offhand.</p>
       <div class="row"><button class="mc-btn" data-page="main">Back</button></div>
     </div>
-    <div class="version">Craftverse 1.0 · runs entirely in your browser</div>
+    <div class="version" id="version-line"></div>
   </div>
 </div>
 
 <!-- Loading -->
 <div id="loading" class="screen" hidden><div class="loading-box"><h2 id="loading-title">Loading world</h2><div class="bar"><div id="loading-bar"></div></div><div id="loading-text">Generating terrain...</div></div></div>
 
-<!-- HUD -->
+<!-- HUD: #views holds one container per player (built in JS) -->
 <div id="hud" hidden>
-  <div id="crosshair"></div>
-  <div id="vignette"></div>
-  <div id="water-overlay"></div>
-  <div id="portal-overlay"></div>
-  <div id="fire-overlay"></div>
-  <div id="pumpkin-overlay"></div>
+  <div id="views"></div>
   <div id="title-big"></div><div id="title-small"></div>
   <div id="toast"></div>
   <div id="bossbar" hidden><div class="boss-name"></div><div class="boss-track"><div class="boss-fill"></div></div></div>
   <div id="effects"></div>
   <div id="debug" hidden></div>
-  <div id="chat"><div id="chat-log"></div><input id="chat-input" hidden maxlength="256" autocomplete="off"></div>
-  <div id="status">
-    <div id="hearts" class="stat-row"></div>
-    <div id="hunger" class="stat-row"></div>
-    <div id="armor" class="stat-row"></div>
-    <div id="air" class="stat-row"></div>
-    <div id="xp"><div id="xp-fill"></div><div id="xp-level"></div></div>
-    <div id="item-name"></div>
-    <div id="hotbar"></div>
-    <div id="offhand-slot" class="slot"></div>
-  </div>
+  <div id="chat"><div id="chat-log"></div><div id="suggest" hidden></div><input id="chat-input" hidden maxlength="256" autocomplete="off"></div>
   <div id="sleep-overlay" hidden><div>Sleeping...</div></div>
 </div>
 
 <!-- Modal screens -->
 <div id="modal" class="screen" hidden>
-  <div id="modal-box"></div>
   <div id="cursor-stack" class="slot floating" hidden></div>
   <div id="tooltip" hidden></div>
 </div>

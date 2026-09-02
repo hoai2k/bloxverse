@@ -204,7 +204,7 @@ export class Mob extends Entity {
   update(dt) {
     this.age += dt; this.attackCd = Math.max(0, this.attackCd - dt); this.hurtTimer = Math.max(0, this.hurtTimer - dt); this.jumpCd = Math.max(0, this.jumpCd - dt);
     if (this.dead) { this.dyingT += dt; if (this.obj) { this.obj.rotation.z = Math.min(Math.PI / 2, this.dyingT * 4); this.obj.position.y = this.y - Math.min(0.5, this.dyingT) * 0.2; } if (this.dyingT > 0.6) this.remove(); return; }
-    const g = this.game, p = g.player;
+    const g = this.game, p = g.nearestPlayer(this.x, this.y, this.z) || g.player;
     if (this.panic > 0) this.panic -= dt; if (this.anger > 0) this.anger -= dt; if (this.love > 0) this.love -= dt;
     if (this.baby) { this.growth += dt; if (this.growth > 1200) { this.baby = false; this.w = this.def.w; this.h = this.def.h; this.buildModel(); } }
     // environment damage
@@ -235,21 +235,23 @@ export class Mob extends Entity {
     this.animate(dt);
   }
   ai(dt) {
-    const g = this.game, p = g.player, def = this.def;
+    const g = this.game, def = this.def;
+    const p = g.nearestPlayer(this.x, this.y, this.z, { notCreative: !def.boss && this.anger <= 0 }) || g.nearestPlayer(this.x, this.y, this.z) || g.player;
     const dp = Math.hypot(p.x - this.x, p.z - this.z), dpy = p.y - this.y;
     const peaceful = g.difficulty === 0;
     // target selection
     if (def.hostile || (def.neutral && this.anger > 0)) {
       if (!peaceful && !p.dead && !(def.neutralInLight && g.world.getLightLevel(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z), g.sunLevel) > 7 && this.anger <= 0)) {
-        if (dp < (def.big ? 48 : 16) && Math.abs(dpy) < 12 && p.gamemode !== 'spectator' && !(p.gamemode === 'creative' && !def.boss && this.anger <= 0)) this.target = p; else if (this.target === p && dp > 24) this.target = null;
+        if (dp < (def.big ? 48 : 16) && Math.abs(dpy) < 12 && !p.dead && p.gamemode !== 'spectator' && !(p.gamemode === 'creative' && !def.boss && this.anger <= 0)) this.target = p; else if (this.target === p && dp > 24) this.target = null;
       } else this.target = null;
     }
     if (def.guardian) { // iron golem: attack nearest hostile
       if (!this.target || this.target.removed || this.target.dead) { this.target = null; let best = null, bd = 12; for (const e of g.entities.list) if (e instanceof Mob && e.def.hostile && !e.dead) { const d = this.distTo(e); if (d < bd) { bd = d; best = e; } } this.target = best; }
     }
-    if (this.tamed && this.owner === 'player' && !this.sitting) { // wolf: attack what hurt the owner / owner's target
-      if (!this.target && p.lastAttacker && !p.lastAttacker.removed && !p.lastAttacker.dead && p.lastAttackerT > g.time - 200) this.target = p.lastAttacker;
-      if (!this.target && p.lastTarget && !p.lastTarget.removed && !p.lastTarget.dead && p.lastTargetT > g.time - 200 && p.lastTarget !== this) this.target = p.lastTarget;
+    const owner = this.ownerPlayer || (this.tamed ? g.players[this.ownerIndex || 0] : null);
+    if (this.tamed && owner && !this.sitting) { // wolf: attack what hurt the owner / owner's target
+      if (!this.target && owner.lastAttacker && !owner.lastAttacker.removed && !owner.lastAttacker.dead && owner.lastAttackerT > g.time - 200) this.target = owner.lastAttacker;
+      if (!this.target && owner.lastTarget && !owner.lastTarget.removed && !owner.lastTarget.dead && owner.lastTargetT > g.time - 200 && owner.lastTarget !== this) this.target = owner.lastTarget;
     }
     if (this.target && (this.target.removed || this.target.dead)) this.target = null;
     // villagers flee zombies
@@ -276,14 +278,14 @@ export class Mob extends Entity {
         const tx = dive ? t.x : cx, ty = dive ? t.y + 1 : cy, tz = dive ? t.z : cz;
         const vx = tx - this.x, vy = ty - this.y, vz = tz - this.z, vd = Math.hypot(vx, vy, vz) || 1;
         this.vx += vx / vd * speed * dt * 4; this.vy += vy / vd * speed * dt * 4; this.vz += vz / vd * speed * dt * 4; this.yaw = Math.atan2(-this.vx, -this.vz);
-        if (dive && this.distTo(t) < 1.5 && this.attackCd <= 0) { this.attackCd = 1; g.hurtPlayer(def.damage, this); }
+        if (dive && this.distTo(t) < 1.5 && this.attackCd <= 0) { this.attackCd = 1; if (t.isPlayer) t.hurt(def.damage, this); else if (t.hurt) t.hurt(def.damage, this); }
         this.moving = true; return;
-      } else { moveX = dx / d; moveZ = dz / d; if (d < (def.big ? 3 : 1.2) + this.w / 2 + (t.w || 0.6) / 2 && Math.abs(t.y - this.y) < 2.5 && this.attackCd <= 0) { this.attackCd = 1; const dmg = def.damage * (g.difficulty === 1 ? 0.7 : g.difficulty === 3 ? 1.4 : 1); if (t === p) g.hurtPlayer(Math.max(1, Math.round(dmg)), this); else if (t.hurt) t.hurt(dmg, this); if (def.poison && t === p) p.effects.poison = 5; } }
+      } else { moveX = dx / d; moveZ = dz / d; if (d < (def.big ? 3 : 1.2) + this.w / 2 + (t.w || 0.6) / 2 && Math.abs(t.y - this.y) < 2.5 && this.attackCd <= 0) { this.attackCd = 1; const dmg = def.damage * (g.difficulty === 1 ? 0.7 : g.difficulty === 3 ? 1.4 : 1); if (t.isPlayer) t.hurt(Math.max(1, Math.round(dmg)), this); else if (t.hurt) t.hurt(dmg, this); if (def.poison && t.isPlayer) t.effects.poison = 5; } }
       if (def.teleport && d > 12 && Math.random() < dt * 0.5) this.teleportNear(t);
       if (def.flies && !def.swoop) { const ty = t.y + (def.big ? 6 : 1.5) - this.y; this.vy += Math.sign(ty) * Math.min(Math.abs(ty), 1) * speed * dt * 3; }
     } else {
       // wander / follow owner / breeding
-      if (this.tamed && this.owner === 'player') { if (dp > 12) { this.x = p.x; this.y = p.y; this.z = p.z; } else if (dp > 4) { moveX = (p.x - this.x) / dp; moveZ = (p.z - this.z) / dp; speed *= 1.3; } }
+      if (this.tamed && owner) { const od = Math.hypot(owner.x - this.x, owner.z - this.z) || 1; if (od > 12) { this.x = owner.x; this.y = owner.y; this.z = owner.z; } else if (od > 4) { moveX = (owner.x - this.x) / od; moveZ = (owner.z - this.z) / od; speed *= 1.3; } }
       else if (this.love > 0) {
         let mate = null, md = 8; for (const e of g.entities.list) if (e !== this && e instanceof Mob && e.type === this.type && e.love > 0 && !e.baby) { const d = this.distTo(e); if (d < md) { md = d; mate = e; } }
         if (mate) { moveX = (mate.x - this.x) / (md || 1); moveZ = (mate.z - this.z) / (md || 1); if (md < 1.2) { this.love = 0; mate.love = 0; g.entities.spawnMob(this.type, (this.x + mate.x) / 2, this.y, (this.z + mate.z) / 2, { baby: true, color: this.color }); g.entities.spawnXP((this.x + mate.x) / 2, this.y, (this.z + mate.z) / 2, 3); for (let i = 0; i < 6; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'heart', 1); } }
@@ -324,7 +326,7 @@ export class Mob extends Entity {
     if (def.aquatic) { if (this.inWater) { if (this.target) this.vy += (this.target.y - this.y) * dt * 3; else this.vy += (Math.sin(this.age) * 0.5) * dt; this.noGravity = true; } else this.noGravity = false; }
   }
   dragonAI(dt) {
-    const g = this.game, p = g.player; this.moving = true;
+    const g = this.game, p = g.nearestPlayer(this.x, this.y, this.z) || g.player; this.moving = true;
     this.phaseT = (this.phaseT || 0) + dt;
     const phase = Math.floor(this.phaseT / 12) % 3; // 0,1 circle ; 2 charge
     let tx, ty, tz;
@@ -334,7 +336,7 @@ export class Mob extends Entity {
     const sp = this.def.speed * (phase === 2 ? 1.6 : 1);
     this.vx += (dx / d * sp - this.vx) * dt * 1.5; this.vy += (dy / d * sp - this.vy) * dt * 1.5; this.vz += (dz / d * sp - this.vz) * dt * 1.5;
     this.yaw = Math.atan2(-this.vx, -this.vz); this.headYaw = this.yaw;
-    if (this.distTo(p) < 5 && this.attackCd <= 0) { this.attackCd = 1.5; g.hurtPlayer(this.def.damage, this); p.vx += this.vx * 0.5; p.vy += 6; p.vz += this.vz * 0.5; }
+    if (this.distTo(p) < 5 && this.attackCd <= 0) { this.attackCd = 1.5; p.hurt(this.def.damage, this); p.vx += this.vx * 0.5; p.vy += 6; p.vz += this.vz * 0.5; }
     if (phase === 2 && this.attackCd <= 0 && Math.random() < dt * 0.3 && this.distTo(p) > 12) { this.attackCd = 2; g.entities.spawnFireball(this, p, 1.5); }
     if (this.y < 40) this.vy += 10 * dt;
     // destroy blocks it flies through (except end stone/obsidian/bedrock)
@@ -359,14 +361,14 @@ export class Mob extends Entity {
   die(source) {
     const g = this.game; this.dead = true; this.health = 0;
     g.playSoundAt('death', this.x, this.y, this.z, { volume: 0.6 });
-    const playerKill = source === g.player || (source && source.owner === 'player') || (source && source.shooter === g.player);
+    const playerKill = (source && source.isPlayer) || (source && source.owner === 'player') || (source && source.shooter && source.shooter.isPlayer);
     const loot = playerKill ? (this.looting || 0) : 0;
     if (!(this.def.villager)) for (const [item, min, max, chance] of this.def.drops) { if (Math.random() > Math.min(1, chance + loot * 0.05)) continue; const n = min + Math.floor(Math.random() * (max - min + 1 + loot)) + (playerKill && Math.random() < 0.3 ? 1 : 0); if (n > 0) { let id; try { id = resolveId(item); } catch { continue; } if (this.fire > 0 && item === 'beef') id = I.cooked_beef; if (this.fire > 0 && item === 'porkchop') id = I.cooked_porkchop; if (this.fire > 0 && item === 'chicken') id = I.cooked_chicken; g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(id, n), true); } }
     if (this.type === 'sheep' && !this.sheared) g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(this.woolId(), 1), true);
     if (playerKill && this.def.xp) g.entities.spawnXP(this.x, this.y + 0.5, this.z, this.def.xp);
     if (this.type === 'slime' && this.size > 1) for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) g.entities.spawnMob('slime', this.x + Math.random() - 0.5, this.y, this.z + Math.random() - 0.5, { size: this.size - 1 });
     if (this.def.boss) g.onDragonKilled(this);
-    if (this.target === g.player && playerKill) { g.stats.kills = (g.stats.kills || 0) + 1; }
+    if (playerKill) { g.stats.kills = (g.stats.kills || 0) + 1; }
     g.stats.mobKills = (g.stats.mobKills || 0) + (playerKill ? 1 : 0);
   }
   woolId() { const { COLORS } = this.game.consts; const c = this.colorName || 'white'; return B[`${c}_wool`]; }
@@ -375,14 +377,14 @@ export class Mob extends Entity {
     const g = this.game; const def = this.def; const id = stack ? stack.id : 0; const item = id ? getItem(id) : null;
     if (def.shearable && id === I.shears && !this.sheared && !this.baby) { this.sheared = true; this.buildModel(); for (let i = 0; i < 1 + Math.floor(Math.random() * 3); i++) g.entities.dropItem(this.x, this.y + 0.5, this.z, makeStack(this.woolId(), 1), true); player.inventory.damageHeld(1); g.playSoundAt('shear', this.x, this.y, this.z); return true; }
     if (def.milk && id === I.bucket && !this.baby) { player.inventory.consumeHeld(1); player.give(makeStack(I.milk_bucket, 1)); g.playSoundAt('bucket', this.x, this.y, this.z); return true; }
-    if (def.tameable && !this.tamed && id && I[def.tameable] === id) { player.inventory.consumeHeld(1); if (Math.random() < 0.34) { this.tamed = true; this.owner = 'player'; this.noDespawn = true; this.buildModel(); this.anger = 0; this.target = null; for (let i = 0; i < 8; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'heart', 1); } else for (let i = 0; i < 4; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'smoke', 1); return true; }
+    if (def.tameable && !this.tamed && id && I[def.tameable] === id) { player.inventory.consumeHeld(1); if (Math.random() < 0.34) { this.tamed = true; this.owner = 'player'; this.ownerIndex = player.index; this.ownerPlayer = player; this.noDespawn = true; this.buildModel(); this.anger = 0; this.target = null; for (let i = 0; i < 8; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'heart', 1); } else for (let i = 0; i < 4; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'smoke', 1); return true; }
     if (this.tamed && (!id || !(def.food && def.food.some(f => I[f] === id)))) { this.sitting = !this.sitting; return true; }
     if (def.food && id && def.food.some(f => I[f] === id)) {
       if (this.tamed && this.health < this.maxHealth) { this.health = Math.min(this.maxHealth, this.health + 4); player.inventory.consumeHeld(1); for (let i = 0; i < 4; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'heart', 1); return true; }
       if (this.baby) { this.growth += 120; player.inventory.consumeHeld(1); g.particles.emit(this.x, this.y + this.h, this.z, 'happy', 4); return true; }
       if (this.love <= 0) { this.love = 30; player.inventory.consumeHeld(1); for (let i = 0; i < 6; i++) g.particles.emit(this.x, this.y + this.h, this.z, 'heart', 1); g.playSoundAt('eat', this.x, this.y, this.z); return true; }
     }
-    if (def.villager) { g.ui.openTrade(this); return true; }
+    if (def.villager) { g.ui.openTrade(player, this); return true; }
     if (item && item.dye && this.type === 'sheep') { this.colorName = item.dye; this.color = g.consts.COLOR_HEX[item.dye]; player.inventory.consumeHeld(1); this.buildModel(); return true; }
     if (id === I.name_tag) { player.inventory.consumeHeld(1); this.noDespawn = true; this.named = true; return true; }
     return false;
@@ -422,9 +424,9 @@ export class ItemEntity extends Entity {
     this.age += dt; this.life -= dt; this.pickupDelay -= dt; if (this.life <= 0) { this.remove(); return; }
     this.physics(dt, { groundDrag: 0.5 }); if (this.inWater) this.vy += 20 * dt; if (this.inLava) { this.remove(); return; }
     if (this.y < -20) { this.remove(); return; }
-    const p = this.game.player; if (this.pickupDelay <= 0 && !p.dead && p.gamemode !== 'spectator') {
+    const p = this.game.nearestPlayer(this.x, this.y, this.z); if (this.pickupDelay <= 0 && p) {
       const d = Math.hypot(p.x - this.x, p.y + 0.9 - this.y, p.z - this.z);
-      if (d < 1.6) { const left = p.inventory.add(this.stack); if (left < this.stack.count) { this.game.playSoundAt('pop', this.x, this.y, this.z, { volume: 0.5 }); this.game.ui.invalidateInventory(); } if (left <= 0) { this.remove(); return; } this.stack.count = left; }
+      if (d < 1.6) { const left = p.inventory.add(this.stack); if (left < this.stack.count) { this.game.playSoundAt('pop', this.x, this.y, this.z, { volume: 0.5 }); this.game.ui.invalidateInventory(p); } if (left <= 0) { this.remove(); return; } this.stack.count = left; }
       else if (d < 3) { this.vx += (p.x - this.x) / d * dt * 6; this.vz += (p.z - this.z) / d * dt * 6; }
     }
     // merge with nearby same items
@@ -435,7 +437,7 @@ export class ItemEntity extends Entity {
 }
 export class XPOrb extends Entity {
   constructor(game, x, y, z, value) { super(game, x, y, z); this.value = value; this.w = 0.3; this.h = 0.3; this.life = 300; const m = new THREE.Mesh(new THREE.SphereGeometry(0.12 + Math.min(0.15, value * 0.01), 6, 6), new THREE.MeshBasicMaterial({ color: value > 20 ? 0xf0f040 : 0x70f040 })); this.obj = m; game.renderer.entityGroup.add(m); this.vx = (Math.random() - 0.5) * 3; this.vy = 3 + Math.random() * 2; this.vz = (Math.random() - 0.5) * 3; }
-  update(dt) { this.age += dt; this.life -= dt; if (this.life <= 0) { this.remove(); return; } this.physics(dt, { groundDrag: 0.5 }); const p = this.game.player; if (p.dead) return; const d = Math.hypot(p.x - this.x, p.y + 0.9 - this.y, p.z - this.z); if (d < 0.9) { p.addXP(this.value); this.game.playSoundAt('orb', this.x, this.y, this.z, { volume: 0.5 }); this.remove(); return; } if (d < 7) { this.vx += (p.x - this.x) / d * dt * 30; this.vy += (p.y + 0.9 - this.y) / d * dt * 30; this.vz += (p.z - this.z) / d * dt * 30; } if (this.obj) { this.obj.position.set(this.x, this.y + 0.15, this.z); this.obj.material.color.setHSL(0.25 + Math.sin(this.age * 6) * 0.05, 0.9, 0.6); } }
+  update(dt) { this.age += dt; this.life -= dt; if (this.life <= 0) { this.remove(); return; } this.physics(dt, { groundDrag: 0.5 }); const p = this.game.nearestPlayer(this.x, this.y, this.z); if (!p) return; const d = Math.hypot(p.x - this.x, p.y + 0.9 - this.y, p.z - this.z); if (d < 0.9) { p.addXP(this.value); this.game.playSoundAt('orb', this.x, this.y, this.z, { volume: 0.5 }); this.remove(); return; } if (d < 7) { this.vx += (p.x - this.x) / d * dt * 30; this.vy += (p.y + 0.9 - this.y) / d * dt * 30; this.vz += (p.z - this.z) / d * dt * 30; } if (this.obj) { this.obj.position.set(this.x, this.y + 0.15, this.z); this.obj.material.color.setHSL(0.25 + Math.sin(this.age * 6) * 0.05, 0.9, 0.6); } }
 }
 export class Projectile extends Entity {
   constructor(game, kind, x, y, z, vx, vy, vz, shooter, opts = {}) {
@@ -450,7 +452,7 @@ export class Projectile extends Entity {
   update(dt) {
     this.age += dt; this.life -= dt; if (this.life <= 0) { this.remove(); return; }
     const g = this.game;
-    if (this.stuck) { this.stuckT = (this.stuckT || 0) + dt; if (this.stuckT > 8) this.remove(); if (this.kind === 'arrow' && this.stuckT > 0.3 && !g.player.dead) { const p = g.player; if (Math.hypot(p.x - this.x, p.y + 0.9 - this.y, p.z - this.z) < 1.5 && p.gamemode !== 'spectator') { if (p.gamemode !== 'creative') p.give(makeStack(I.arrow, 1)); g.playSoundAt('pop', this.x, this.y, this.z, { volume: 0.4 }); this.remove(); } } return; }
+    if (this.stuck) { this.stuckT = (this.stuckT || 0) + dt; if (this.stuckT > 8) this.remove(); if (this.kind === 'arrow' && this.stuckT > 0.3) { const p = g.nearestPlayer(this.x, this.y, this.z); if (p && Math.hypot(p.x - this.x, p.y + 0.9 - this.y, p.z - this.z) < 1.5) { if (p.gamemode !== 'creative') p.give(makeStack(I.arrow, 1)); g.playSoundAt('pop', this.x, this.y, this.z, { volume: 0.4 }); this.remove(); } } return; }
     const ox = this.x, oy = this.y, oz = this.z;
     if (!this.noGravity) this.vy -= (this.kind === 'arrow' ? 20 : 25) * dt;
     const r = moveEntity(g.world, this, this.vx * dt, this.vy * dt, this.vz * dt);
@@ -458,14 +460,16 @@ export class Projectile extends Entity {
     if (this.flaming && Math.random() < 0.5) g.particles.emit(this.x, this.y + this.h / 2, this.z, 'flame', 1);
     // hit entities
     const hitE = g.entities.hitTest(this.x, this.y, this.z, this.w, this.shooter);
-    if (hitE || (g.player !== this.shooter && !g.player.dead && Math.hypot(g.player.x - this.x, g.player.y + 0.9 - this.y, g.player.z - this.z) < 0.7 && g.player.gamemode !== 'spectator')) {
-      const target = hitE || g.player;
+    let hitP = null;
+    if (!hitE) for (const pl of g.players) { if (pl === this.shooter || pl.dead || pl.gamemode === 'spectator' || pl.gamemode === 'creative') continue; if (Math.hypot(pl.x - this.x, pl.y + 0.9 - this.y, pl.z - this.z) < 0.7) { hitP = pl; break; } }
+    if (hitE || hitP) {
+      const target = hitE || hitP;
       this.onHit(target); return;
     }
     if (r.hitX || r.hitY || r.hitZ) {
       if (this.kind === 'arrow') { this.stuck = true; this.vx = this.vy = this.vz = 0; g.playSoundAt('arrow_hit', this.x, this.y, this.z); }
       else if (this.kind === 'fireball') { const own = this.shooter && this.shooter.type === 'blaze' ? 0 : (this.opts.power || 1); if (own) g.explode(this.x, this.y, this.z, own, this.shooter, true); else { g.world.setBlock(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z), B.fire); } this.remove(); }
-      else if (this.kind === 'ender_pearl') { if (this.shooter === g.player) { g.player.x = this.x; g.player.y = this.y; g.player.z = this.z; g.hurtPlayer(5, null, true); g.playSoundAt('teleport', this.x, this.y, this.z); } this.remove(); }
+      else if (this.kind === 'ender_pearl') { const sh = this.shooter; if (sh && sh.isPlayer) { sh.x = this.x; sh.y = this.y; sh.z = this.z; sh.hurt(5, null, { fall: true }); g.playSoundAt('teleport', this.x, this.y, this.z); } this.remove(); }
       else if (this.kind === 'potion') { g.particles.emit(this.x, this.y, this.z, 'potion', 10); this.remove(); }
       else { if (this.kind === 'egg' && Math.random() < 0.125) g.entities.spawnMob('chicken', this.x, this.y, this.z, { baby: true }); g.particles.emit(this.x, this.y, this.z, 'snow', 6); this.remove(); }
       return;
@@ -476,10 +480,10 @@ export class Projectile extends Entity {
     const g = this.game;
     if (this.kind === 'arrow' || this.kind === 'fireball' || this.kind === 'potion') {
       let dmg = this.damage; if (this.kind === 'fireball') dmg = 6;
-      if (target === g.player) { if (this.kind === 'potion') { g.player.effects.poison = 8; } else g.hurtPlayer(dmg, this.shooter || this); if (this.kind === 'fireball') g.player.fire = 5; }
-      else if (target.hurt) { target.hurt(dmg, this.shooter || this, 0.4 + (this.punch || 0) * 0.5); if (this.kind === 'fireball' || this.flaming) target.fire = 5; if (this.shooter === g.player) { g.player.lastTarget = target; g.player.lastTargetT = g.time; } }
+      if (target.isPlayer) { if (this.kind === 'potion') { target.effects.poison = 8; } else target.hurt(dmg, this.shooter || this); if (this.kind === 'fireball') target.fire = 5; }
+      else if (target.hurt) { target.hurt(dmg, this.shooter || this, 0.4 + (this.punch || 0) * 0.5); if (this.kind === 'fireball' || this.flaming) target.fire = 5; if (this.shooter && this.shooter.isPlayer) { this.shooter.lastTarget = target; this.shooter.lastTargetT = g.time; } }
       if (this.kind === 'fireball' && this.opts.power) g.explode(this.x, this.y, this.z, this.opts.power, this.shooter, true);
-    } else if (this.kind === 'ender_pearl') { if (this.shooter === g.player) { g.player.x = this.x; g.player.y = this.y; g.player.z = this.z; g.hurtPlayer(5, null, true); } }
+    } else if (this.kind === 'ender_pearl') { const sh = this.shooter; if (sh && sh.isPlayer) { sh.x = this.x; sh.y = this.y; sh.z = this.z; sh.hurt(5, null, { fall: true }); } }
     else { if (target.hurt) target.hurt(this.kind === 'snowball' && target.type === 'blaze' ? 3 : 0, this.shooter, 0.3); }
     this.remove();
   }
@@ -491,7 +495,7 @@ export class PrimedTNT extends Entity {
 export class FallingBlock extends Entity {
   constructor(game, x, y, z, id, meta) { super(game, x + 0.5, y, z + 0.5); this.blockId = id; this.meta = meta; this.w = 0.98; this.h = 0.98; this.obj = game.renderer.makeBlockMesh(id, meta); uniqueMaterials(this.obj); game.renderer.entityGroup.add(this.obj); }
   update(dt) { this.age += dt; const r = this.physics(dt); if (this.obj) { this.obj.position.set(this.x, this.y + 0.49, this.z); this.updateLight(); }
-    if (this.onGround || this.age > 30) { const bx = Math.floor(this.x), by = Math.round(this.y), bz = Math.floor(this.z); const cur = this.game.world.getBlock(bx, by, bz); if (cur === 0 || BLOCKS[cur].replaceable) this.game.world.setBlock(bx, by, bz, this.blockId, this.meta); else this.game.entities.dropItem(this.x, this.y, this.z, makeStack(this.blockId, 1)); if (this.blockId === B.anvil && this.age > 0.5) { const p = this.game.player; if (Math.abs(p.x - this.x) < 0.8 && Math.abs(p.z - this.z) < 0.8 && Math.abs(p.y + 1.8 - this.y) < 1.2) this.game.hurtPlayer(Math.min(20, Math.floor(this.age * 8)), null); } this.remove(); }
+    if (this.onGround || this.age > 30) { const bx = Math.floor(this.x), by = Math.round(this.y), bz = Math.floor(this.z); const cur = this.game.world.getBlock(bx, by, bz); if (cur === 0 || BLOCKS[cur].replaceable) this.game.world.setBlock(bx, by, bz, this.blockId, this.meta); else this.game.entities.dropItem(this.x, this.y, this.z, makeStack(this.blockId, 1)); if (this.blockId === B.anvil && this.age > 0.5) for (const p of this.game.players) { if (Math.abs(p.x - this.x) < 0.8 && Math.abs(p.z - this.z) < 0.8 && Math.abs(p.y + 1.8 - this.y) < 1.2) p.hurt(Math.min(20, Math.floor(this.age * 8)), null); } this.remove(); }
     if (this.y < -5) this.remove(); }
 }
 
@@ -554,17 +558,17 @@ export class EntityManager {
   }
   countMobs(filter) { let n = 0; for (const e of this.list) if (e instanceof Mob && !e.dead && filter(e)) n++; return n; }
   update(dt) {
-    const g = this.game, p = g.player;
-    for (const e of this.list) { if (e.removed) continue; const d2 = (e.x - p.x) ** 2 + (e.z - p.z) ** 2; if (d2 > 110 * 110) { if (e instanceof Mob && !e.noDespawn && !e.def.boss) e.remove(); continue; } if (!g.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) continue; try { e.update(dt); } catch (err) { console.error('entity update', e.type, err); e.remove(); } }
+    const g = this.game;
+    for (const e of this.list) { if (e.removed) continue; let d2 = Infinity; for (const pl of g.players) d2 = Math.min(d2, (e.x - pl.x) ** 2 + (e.z - pl.z) ** 2); if (d2 > 110 * 110) { if (e instanceof Mob && !e.noDespawn && !e.def.boss) e.remove(); continue; } if (!g.world.isLoaded(Math.floor(e.x), Math.floor(e.z))) continue; try { e.update(dt); } catch (err) { console.error('entity update', e.type, err); e.remove(); } }
     // random despawn far away
-    if (Math.random() < dt * 0.5) for (const e of this.list) if (e instanceof Mob && !e.noDespawn && !e.def.boss && !e.dead) { const d = Math.hypot(e.x - p.x, e.z - p.z); if (d > 40 && Math.random() < 0.02) e.remove(); }
+    if (Math.random() < dt * 0.5) for (const e of this.list) if (e instanceof Mob && !e.noDespawn && !e.def.boss && !e.dead) { const d = g.nearestPlayerDist(e.x, e.y, e.z); if (d > 40 && Math.random() < 0.02) e.remove(); }
     this.list = this.list.filter(e => !e.removed);
     this.spawnT -= dt;
     if (this.spawnT <= 0) { this.spawnT = 0.8; this.trySpawn(); }
     this.passiveT -= dt; if (this.passiveT <= 0) { this.passiveT = 12; this.tryPassiveSpawn(); }
   }
   trySpawn() {
-    const g = this.game, p = g.player, w = g.world; if (g.difficulty === 0) { for (const e of this.list) if (e instanceof Mob && e.def.hostile && !e.def.boss) e.remove(); return; }
+    const g = this.game, w = g.world; const p = g.players[Math.floor(Math.random() * g.players.length)] || g.player; if (g.difficulty === 0) { for (const e of this.list) if (e instanceof Mob && e.def.hostile && !e.def.boss) e.remove(); return; }
     const hostileCount = this.countMobs(e => e.def.hostile);
     const cap = 30 + g.difficulty * 6; if (hostileCount >= cap) return;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -592,7 +596,7 @@ export class EntityManager {
     }
   }
   tryPassiveSpawn() {
-    const g = this.game, p = g.player, w = g.world; if (w.dim !== 0) return;
+    const g = this.game, w = g.world; const p = g.players[Math.floor(Math.random() * g.players.length)] || g.player; if (w.dim !== 0) return;
     if (this.countMobs(e => e.def.passive) > 16) return;
     const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 25; const x = Math.floor(p.x + Math.cos(a) * r), z = Math.floor(p.z + Math.sin(a) * r);
     if (!w.isLoaded(x, z)) return; const y = w.surfaceY(x, z) + 1; if (w.getBlock(x, y - 1, z) !== B.grass_block || w.getSky(x, y, z) < 9) return;

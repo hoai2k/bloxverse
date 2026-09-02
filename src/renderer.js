@@ -44,9 +44,8 @@ export class Renderer {
     this.three.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.three.autoClear = true;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
-    this.camera.rotation.order = 'YXZ';
-    this.scene.add(this.camera);
+    this.views = [];
+    this.camera = null; // set by createView(); views[0].camera is the default/panorama camera
     // atlas
     const atlasCanvas = buildAtlas();
     this.atlas = new THREE.CanvasTexture(atlasCanvas);
@@ -63,8 +62,8 @@ export class Renderer {
     this.ambient = new THREE.AmbientLight(0xffffff, 0.9); this.scene.add(this.ambient);
     this.sunLight = new THREE.DirectionalLight(0xffffff, 0.5); this.sunLight.position.set(0.3, 1, 0.5); this.scene.add(this.sunLight);
     this.buildSky();
-    this.buildSelection();
-    this.buildHand();
+    this.armMat = new THREE.MeshLambertMaterial({ color: 0xd9a58a });
+    this.createView();
     this.weather = { rain: 0, snow: false };
     this.buildRain();
     this.underwater = false; this.inLava = false;
@@ -76,9 +75,48 @@ export class Renderer {
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.three.setSize(w, h, false);
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.layoutViews();
   }
-  setFov(f) { this.camera.fov = f; this.camera.updateProjectionMatrix(); }
+  // Split the canvas between the active views: 1 = full, 2 = stacked, 3-4 = quadrants.
+  layoutViews() {
+    const w = window.innerWidth, h = window.innerHeight; const n = Math.max(1, this.views.length);
+    const rects = splitLayout(n, w, h);
+    for (let i = 0; i < this.views.length; i++) {
+      const r = rects[i]; const v = this.views[i];
+      v.rect = r; v.camera.aspect = r[2] / Math.max(1, r[3]); v.camera.updateProjectionMatrix();
+    }
+    return rects;
+  }
+  setFov(f) { this.fov = f; for (const v of this.views) { v.camera.fov = f; v.camera.updateProjectionMatrix(); } }
+  createView() {
+    const cam = new THREE.PerspectiveCamera(this.fov || 70, 1, 0.05, 1200);
+    cam.rotation.order = 'YXZ'; this.scene.add(cam);
+    const hand = new THREE.Group(); cam.add(hand);
+    const sel = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.7 }));
+    sel.visible = false; this.scene.add(sel);
+    const brk = new THREE.Mesh(new THREE.BoxGeometry(1.004, 1.004, 1.004), new THREE.MeshBasicMaterial({ map: this.atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+    brk.visible = false; brk.renderOrder = 5; this.scene.add(brk);
+    const v = { camera: cam, hand, handItem: null, handId: -1, handMeta: -1, swingT: 0, bobT: 0, selection: sel, breakMesh: brk, rect: [0, 0, 1, 1], hidden: [], handVisible: true };
+    this.views.push(v);
+    if (this.views.length === 1) this.camera = cam;
+    this.layoutViews();
+    return v;
+  }
+  removeView(v) {
+    const i = this.views.indexOf(v); if (i < 0) return;
+    this.views.splice(i, 1);
+    this.scene.remove(v.camera); this.scene.remove(v.selection); this.scene.remove(v.breakMesh);
+    v.selection.geometry.dispose(); v.breakMesh.geometry.dispose();
+    if (v.handItem) disposeObj(v.handItem);
+    if (this.camera === v.camera) this.camera = this.views[0] ? this.views[0].camera : null;
+    this.layoutViews();
+  }
+  setViewCount(n) {
+    while (this.views.length < n) this.createView();
+    while (this.views.length > n) this.removeView(this.views[this.views.length - 1]);
+    this.layoutViews();
+    return this.views;
+  }
 
   // ---------- chunks ----------
   updateChunk(chunk, data) {
@@ -183,46 +221,33 @@ export class Renderer {
   setFogDistance(d) { this.fogDistance = d; }
 
   // ---------- selection & break overlay ----------
-  buildSelection() {
-    const g = new THREE.BoxGeometry(1, 1, 1);
-    const e = new THREE.EdgesGeometry(g);
-    this.selection = new THREE.LineSegments(e, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.7 }));
-    this.selection.visible = false; this.scene.add(this.selection);
-    const bg = new THREE.BoxGeometry(1.004, 1.004, 1.004);
-    this.breakMat = new THREE.MeshBasicMaterial({ map: this.atlas, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-    this.breakMesh = new THREE.Mesh(bg, this.breakMat); this.breakMesh.visible = false; this.breakMesh.renderOrder = 5; this.scene.add(this.breakMesh);
+  showSelection(view, box) { // box: [x0,y0,z0,x1,y1,z1] world coords or null
+    const sel = view.selection;
+    if (!box) { sel.visible = false; return; }
+    sel.visible = true;
+    sel.position.set((box[0] + box[3]) / 2, (box[1] + box[4]) / 2, (box[2] + box[5]) / 2);
+    sel.scale.set(box[3] - box[0] + 0.004, box[4] - box[1] + 0.004, box[5] - box[2] + 0.004);
   }
-  showSelection(box) { // box: [x0,y0,z0,x1,y1,z1] world coords or null
-    if (!box) { this.selection.visible = false; return; }
-    this.selection.visible = true;
-    this.selection.position.set((box[0] + box[3]) / 2, (box[1] + box[4]) / 2, (box[2] + box[5]) / 2);
-    this.selection.scale.set(box[3] - box[0] + 0.004, box[4] - box[1] + 0.004, box[5] - box[2] + 0.004);
-  }
-  showBreak(x, y, z, stage) {
-    if (stage < 0) { this.breakMesh.visible = false; return; }
-    this.breakMesh.visible = true; this.breakMesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+  showBreak(view, x, y, z, stage) {
+    const mesh = view.breakMesh;
+    if (stage < 0) { mesh.visible = false; return; }
+    mesh.visible = true; mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
     const idx = tileFor('destroy_' + Math.min(9, stage)); const [u, v] = tileUV(idx); const s = 1 / ATLAS_TILES;
-    const uv = this.breakMesh.geometry.attributes.uv;
-    for (let i = 0; i < uv.count; i++) { const iu = i % 4; const uu = (iu === 1 || iu === 3) ? 0 : 1; const vv = (iu >= 2) ? 1 : 0; uv.setXY(i, u + (iu === 0 || iu === 2 ? 0 : 1) * s, v + (iu < 2 ? 0 : 1) * s); }
+    const uv = mesh.geometry.attributes.uv;
+    for (let i = 0; i < uv.count; i++) { const iu = i % 4; uv.setXY(i, u + (iu === 0 || iu === 2 ? 0 : 1) * s, v + (iu < 2 ? 0 : 1) * s); }
     uv.needsUpdate = true;
   }
 
   // ---------- first person hand ----------
-  buildHand() {
-    this.hand = new THREE.Group(); this.camera.add(this.hand);
-    this.handItem = null; this.handId = -1; this.handMeta = -1;
-    this.swingT = 0; this.bobT = 0;
-    this.armMat = new THREE.MeshLambertMaterial({ color: 0xd9a58a });
-  }
-  setHeldItem(id, meta = 0) {
-    if (id === this.handId && meta === this.handMeta) return;
-    this.handId = id; this.handMeta = meta;
-    if (this.handItem) { this.hand.remove(this.handItem); disposeObj(this.handItem); this.handItem = null; }
+  setHeldItem(view, id, meta = 0) {
+    if (id === view.handId && meta === view.handMeta) return;
+    view.handId = id; view.handMeta = meta;
+    if (view.handItem) { view.hand.remove(view.handItem); disposeObj(view.handItem); view.handItem = null; }
     let obj;
     if (!id) { obj = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.6), this.armMat); obj.position.set(0.5, -0.5, -0.75); obj.rotation.set(0.25, 0.35, 0); }
     else if (isBlockItem(id) && BLOCKS[id].render !== 'cross') { obj = this.makeBlockMesh(id, meta); obj.scale.setScalar(0.32); obj.position.set(0.5, -0.5, -0.8); obj.rotation.set(0.1, -0.6, 0); }
     else { obj = this.makeItemMesh(id); obj.scale.setScalar(0.5); obj.position.set(0.48, -0.45, -0.75); obj.rotation.set(0.1, -0.35, -0.3); }
-    this.handItem = obj; this.hand.add(obj);
+    view.handItem = obj; view.hand.add(obj);
   }
   makeBlockMesh(id, meta = 0) {
     const def = BLOCKS[id]; const group = new THREE.Group();
@@ -254,17 +279,17 @@ export class Renderer {
     const mat = new THREE.MeshLambertMaterial({ map: this.atlas, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
     return new THREE.Mesh(g, mat);
   }
-  swing() { this.swingT = 1; }
-  updateHand(dt, moving, lightLevel) {
-    if (this.swingT > 0) this.swingT = Math.max(0, this.swingT - dt * 3.2);
-    if (moving) this.bobT += dt * 7; 
-    const s = Math.sin(this.swingT * Math.PI);
-    this.hand.position.set(Math.sin(this.bobT) * 0.02 * (moving ? 1 : 0) - s * 0.3, Math.abs(Math.cos(this.bobT)) * 0.02 * (moving ? 1 : 0) - s * 0.35, -s * 0.2);
-    this.hand.rotation.set(-s * 1.2, s * 0.5, 0);
+  swing(view) { if (view) view.swingT = 1; }
+  updateHand(view, dt, moving, lightLevel) {
+    if (view.swingT > 0) view.swingT = Math.max(0, view.swingT - dt * 3.2);
+    if (moving) view.bobT += dt * 7;
+    const s = Math.sin(view.swingT * Math.PI);
+    view.hand.position.set(Math.sin(view.bobT) * 0.02 * (moving ? 1 : 0) - s * 0.3, Math.abs(Math.cos(view.bobT)) * 0.02 * (moving ? 1 : 0) - s * 0.35, -s * 0.2);
+    view.hand.rotation.set(-s * 1.2, s * 0.5, 0);
     const l = 0.15 + 0.85 * lightLevel;
-    this.hand.traverse(o => { if (o.isMesh) { const m = o.material; if (!m.userData.base) m.userData.base = m.color.clone(); m.color.copy(m.userData.base).multiplyScalar(l); } });
+    view.hand.traverse(o => { if (o.isMesh) { const m = o.material; if (!m.userData.base) m.userData.base = m.color.clone(); m.color.copy(m.userData.base).multiplyScalar(l); } });
   }
-  setHandVisible(v) { this.hand.visible = v; }
+  setHandVisible(view, vis) { view.handVisible = vis; view.hand.visible = vis; }
 
   // ---------- weather ----------
   buildRain() {
@@ -300,7 +325,37 @@ export class Renderer {
     this.rain.geometry.attributes.position.needsUpdate = true;
   }
 
-  render() { this.three.render(this.scene, this.camera); }
+  // Per-view rendering: each view hides the other players' hands, selection boxes and its
+  // own body model so nobody sees another camera's attachments.
+  beginFrame() {
+    this.latchViewState();
+    this.three.setScissorTest(this.views.length > 1);
+  }
+  renderView(v) {
+    const three = this.three, multi = this.views.length > 1;
+    for (const o of this.views) { o.hand.visible = false; o.selection.visible = false; o.breakMesh.visible = false; }
+    v.hand.visible = v.handVisible; v.selection.visible = v.selVisible; v.breakMesh.visible = v.breakVisible;
+    for (const o of v.hidden) o.visible = false;
+    if (multi) { const H = window.innerHeight; const [x, y, w, h] = v.rect; three.setViewport(x, H - y - h, w, h); three.setScissor(x, H - y - h, w, h); }
+    else three.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    three.render(this.scene, v.camera);
+    for (const o of v.hidden) o.visible = true;
+  }
+  endFrame() {
+    this.three.setScissorTest(false);
+    for (const v of this.views) { v.hand.visible = v.handVisible; v.selection.visible = v.selVisible; v.breakMesh.visible = v.breakVisible; }
+  }
+  render() { this.beginFrame(); for (const v of this.views) this.renderView(v); this.endFrame(); }
+    latchViewState() { for (const v of this.views) { v.selVisible = v.selection.visible; v.breakVisible = v.breakMesh.visible; } }
+}
+
+// Screen split: 1 full, 2 stacked rows, 3 = one wide on top + two below, 4 = quadrants.
+export function splitLayout(n, w, h) {
+  if (n <= 1) return [[0, 0, w, h]];
+  const g = 2, hw = Math.floor((w - g) / 2), hh = Math.floor((h - g) / 2);
+  if (n === 2) return [[0, 0, w, hh], [0, hh + g, w, h - hh - g]];
+  if (n === 3) return [[0, 0, w, hh], [0, hh + g, hw, h - hh - g], [hw + g, hh + g, w - hw - g, h - hh - g]];
+  return [[0, 0, hw, hh], [hw + g, 0, w - hw - g, hh], [0, hh + g, hw, h - hh - g], [hw + g, hh + g, w - hw - g, h - hh - g]];
 }
 
 function makeSunMoonTexture(sun) {

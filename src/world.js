@@ -67,7 +67,7 @@ export class World {
     this.tickTime = 0;
     this.onMesh = null; this.onUnload = null; this.onChunkReady = null; this.onBlockChange = null;
     this.lootChests = [];
-    this._lastCx = null; this._lastCz = null; this._order = [];
+    this._lastKey = null; this._order = null; this._orderR = -1;
     this.pendingResults = [];
     this.meshQueue = new Set();
     this.stats = { generated: 0, meshed: 0 };
@@ -176,57 +176,65 @@ export class World {
   }
 
   // ---------- chunk pipeline ----------
-  setRenderDistance(r) { this.renderDistance = r; this._lastCx = null; }
+  setRenderDistance(r) { this.renderDistance = r; this._lastKey = null; this._order = null; this._orderR = -1; }
 
-  update(px, pz, budgetMs = 6) {
+  // Streams chunks around one or more centers: update([[x,z], ...], budget) or update(x, z, budget).
+  update(centers, pz, budget = 6) {
+    if (typeof centers === 'number') centers = [[centers, pz]];
+    else if (typeof pz === 'number') budget = pz;
+    if (!centers || !centers.length) return;
     const t0 = performance.now();
-    const pcx = Math.floor(px) >> 4, pcz = Math.floor(pz) >> 4;
     const R = this.renderDistance;
-    if (pcx !== this._lastCx || pcz !== this._lastCz) {
-      this._lastCx = pcx; this._lastCz = pcz;
-      // ordering by distance
-      const order = [];
-      for (let dx = -R - 2; dx <= R + 2; dx++) for (let dz = -R - 2; dz <= R + 2; dz++) { const d = dx * dx + dz * dz; order.push([dx, dz, d, Math.max(Math.abs(dx), Math.abs(dz))]); }
-      order.sort((a, b) => a[2] - b[2]);
-      this._order = order;
-      // unload far chunks
+    const cc = centers.map(([x, z]) => [Math.floor(x) >> 4, Math.floor(z) >> 4]);
+    const key = cc.map(c => c[0] + ',' + c[1]).join('|');
+    if (key !== this._lastKey || this._orderR !== R) {
+      this._lastKey = key;
+      if (!this._order || this._orderR !== R) {
+        const order = [];
+        for (let dx = -R - 2; dx <= R + 2; dx++) for (let dz = -R - 2; dz <= R + 2; dz++) order.push([dx, dz, dx * dx + dz * dz, Math.max(Math.abs(dx), Math.abs(dz))]);
+        order.sort((a, b) => a[2] - b[2]);
+        this._order = order; this._orderR = R;
+      }
+      // unload chunks that are far from every center
       for (const c of this.chunks.values()) {
-        const dx = c.cx - pcx, dz = c.cz - pcz;
-        if (Math.max(Math.abs(dx), Math.abs(dz)) > R + 4) this.unloadChunk(c);
+        let keep = false;
+        for (const [pcx, pcz] of cc) if (Math.max(Math.abs(c.cx - pcx), Math.abs(c.cz - pcz)) <= R + 4) { keep = true; break; }
+        if (!keep) this.unloadChunk(c);
       }
-      // request missing
-      for (const [dx, dz] of order) {
-        const cx = pcx + dx, cz = pcz + dz; const key = chunkKey(cx, cz);
-        if (!this.chunks.has(key)) this.requestChunk(cx, cz);
+      // request missing chunks, nearest first, for every center
+      for (const [dx, dz] of this._order) for (const [pcx, pcz] of cc) {
+        const cx = pcx + dx, cz = pcz + dz; const k = chunkKey(cx, cz);
+        if (!this.chunks.has(k)) this.requestChunk(cx, cz);
       }
     }
-    this.pool.drainInline(Math.max(1, budgetMs * 0.5));
-    // integrate results
-    let did = 0;
-    while (this.pendingResults.length && performance.now() - t0 < budgetMs) { this.integrate(this.pendingResults.shift()); did++; }
-    // lighting for generated chunks whose neighbours are generated (nearest first)
+    this.pool.drainInline(Math.max(1, budget * 0.5));
+    while (this.pendingResults.length && performance.now() - t0 < budget) this.integrate(this.pendingResults.shift());
+    // lighting (out to R+1) then meshing (out to R), nearest first, across all centers
     for (const [dx, dz, d, ch] of this._order) {
-      if (performance.now() - t0 > budgetMs) break;
+      if (performance.now() - t0 > budget) break;
       if (ch > R + 1) continue;
-      const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 1) continue;
-      if (!this.neighborsAtLeast(c, 1)) continue;
-      this.lighting.initChunk(c); c.state = 2;
-      for (const ch of this.lighting.dirty) if (ch.state >= 3) this.meshQueue.add(ch);
-      this.lighting.dirty.clear();
-      if (this.onChunkReady) this.onChunkReady(c);
+      for (const [pcx, pcz] of cc) {
+        const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 1) continue;
+        if (!this.neighborsAtLeast(c, 1)) continue;
+        this.lighting.initChunk(c); c.state = 2;
+        for (const chk of this.lighting.dirty) if (chk.state >= 3) this.meshQueue.add(chk);
+        this.lighting.dirty.clear();
+        if (this.onChunkReady) this.onChunkReady(c);
+      }
     }
-    // meshing: new chunks nearest first, then dirty re-meshes
     for (const [dx, dz, d, ch] of this._order) {
-      if (performance.now() - t0 > budgetMs) break;
+      if (performance.now() - t0 > budget) break;
       if (ch > R) continue;
-      const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 2) continue;
-      if (!this.neighborsAtLeast(c, 2)) continue;
-      this.remesh(c); c.state = 3;
+      for (const [pcx, pcz] of cc) {
+        const c = this.getChunk(pcx + dx, pcz + dz); if (!c || c.state !== 2) continue;
+        if (!this.neighborsAtLeast(c, 2)) continue;
+        this.remesh(c); c.state = 3;
+      }
     }
-    if (this.meshQueue.size && performance.now() - t0 < budgetMs + 4) {
-      // closest dirty chunks first
+    if (this.meshQueue.size && performance.now() - t0 < budget + 4) {
+      const [pcx, pcz] = cc[0];
       const arr = [...this.meshQueue].sort((a, b) => ((a.cx - pcx) ** 2 + (a.cz - pcz) ** 2) - ((b.cx - pcx) ** 2 + (b.cz - pcz) ** 2));
-      for (const c of arr) { if (performance.now() - t0 > budgetMs + 4) break; this.meshQueue.delete(c); if (c.state >= 3) this.remesh(c); }
+      for (const c of arr) { if (performance.now() - t0 > budget + 4) break; this.meshQueue.delete(c); if (c.state >= 3) this.remesh(c); }
     }
   }
   neighborsAtLeast(c, state) {

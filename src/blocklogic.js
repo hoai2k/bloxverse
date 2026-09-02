@@ -211,13 +211,13 @@ for (const w of WOODS) {
   };
   d.onBroken = (world, x, y, z, meta) => { if (meta & 8) { if (world.getBlock(x, y - 1, z) === d.id) world.setBlock(x, y - 1, z, 0, 0, { silent: true }); } else if (world.getBlock(x, y + 1, z) === d.id) world.setBlock(x, y + 1, z, 0, 0, { silent: true }); };
 }
-def('bed').onInteract = (world, x, y, z, meta) => { if (game) game.trySleep(x, y, z); return true; };
+def('bed').onInteract = (world, x, y, z, meta, player) => { if (game) game.trySleep(x, y, z, player || game.player); return true; };
 def('bed').onBroken = (world, x, y, z, meta) => {
   const f = meta & 3; const dir = [[0, 1], [-1, 0], [0, -1], [1, 0]][f];
   const ox = (meta & 4) ? x - dir[0] : x + dir[0], oz = (meta & 4) ? z - dir[1] : z + dir[1];
   if (world.getBlock(ox, y, oz) === B.bed) world.setBlock(ox, y, oz, 0, 0, { silent: true });
 };
-def('cake').onInteract = (world, x, y, z, meta) => { if (!game) return false; if (!game.player.eat(2, 0.4)) return true; if ((meta & 7) >= 6) world.setBlock(x, y, z, 0); else world.setMeta(x, y, z, (meta & 7) + 1); return true; };
+def('cake').onInteract = (world, x, y, z, meta, player) => { if (!game) return false; const pl = player || game.player; if (!pl.eat(2, 0.4)) return true; if ((meta & 7) >= 6) world.setBlock(x, y, z, 0); else world.setMeta(x, y, z, (meta & 7) + 1); return true; };
 def('note_block').onInteract = (world, x, y, z, meta) => { const n = ((meta & 31) + 1) % 25; world.setMeta(x, y, z, n); game && game.playSoundAt('note', x, y, z, { freq: 185 * Math.pow(2, n / 12) }); return true; };
 def('jukebox').onInteract = (world, x, y, z) => { game && game.playSoundAt('note', x, y, z, { freq: 330 }); return true; };
 def('nether_portal').onNeighborChanged = (world, x, y, z) => {
