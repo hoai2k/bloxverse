@@ -5,11 +5,39 @@ import { buildOptions } from './ui.js';
 import { hashString } from './noise.js';
 import { B, BLOCKS } from './blocks.js';
 import { I, ITEMS } from './items.js';
+import { Renderer } from './renderer.js';
+import { World } from './world.js';
 
 const $ = (s) => document.querySelector(s);
 const settings = Settings.load();
 const canvas = document.getElementById('game');
 let game = null; let selectedWorld = null;
+// ---------- live world panorama behind the title screen ----------
+let pano = null;
+function startPanorama() {
+  try {
+    if (!pano) {
+      const renderer = game ? game.renderer : new Renderer(canvas);
+      const world = new World({ seed: 20240901, dim: 0, worldType: 'default', renderDistance: 4 });
+      world.onMesh = (c, d) => { if (pano && pano.world === world) renderer.updateChunk(c, d); };
+      world.onUnload = (c) => renderer.removeChunk(c);
+      const h = world.gen.heightAt(8, 8);
+      pano = { renderer, world, t: 0, cam: [8.5, Math.max(h, 63) + 9, 8.5], running: false };
+      renderer.setHandVisible(false); renderer.showSelection(null); renderer.rain.visible = false;
+    }
+    if (pano.running) return; pano.running = true;
+    let last = performance.now();
+    const loop = (now) => {
+      if (!pano || !pano.running) return; requestAnimationFrame(loop);
+      const dt = Math.min(0.1, (now - last) / 1000); last = now; pano.t += dt;
+      const r = pano.renderer; pano.world.update(pano.cam[0], pano.cam[2], 8);
+      r.camera.position.set(pano.cam[0], pano.cam[1], pano.cam[2]); r.camera.rotation.set(-0.12, pano.t * 0.05, 0);
+      r.updateSky(4000 + pano.t * 25, r.camera.position, 0); r.render();
+    };
+    requestAnimationFrame(loop);
+  } catch (e) { console.warn('panorama unavailable', e); pano = null; }
+}
+function stopPanorama() { if (!pano) return null; pano.running = false; pano.world.dispose(); pano.renderer.clearChunks(); const r = pano.renderer; pano = null; return r; }
 const SPLASHES = ['Blocks all the way down!', 'Now with 100% more cubes!', 'Procedurally yours!', 'No assets were harmed', 'Also try touching grass!', 'Creepers gonna creep', 'Dig deep, build high', 'Rendered with love and shaders', 'Punch trees to begin', 'The dragon is waiting'];
 $('.splash').textContent = SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
 
@@ -48,13 +76,15 @@ $('#btn-create-world').onclick = async () => {
 async function playWorld(meta) {
   if (meta.hardcoreDead && !meta.player?.gamemode) { }
   $('#menu').hidden = true;
-  if (!game) { game = new Game(canvas, settings); game.onQuit = () => { $('#menu').hidden = false; showPage('worlds'); }; window.game = game; }
+  const pr = stopPanorama();
+  if (!game) { game = new Game(canvas, settings); game.panoramaRenderer = pr; game.onQuit = () => { $('#menu').hidden = false; showPage('worlds'); startPanorama(); }; window.game = game; }
   game.settings = settings;
   try { await game.start(meta); } catch (e) { console.error(e); alert('Failed to start world: ' + e.message); $('#menu').hidden = false; $('#loading').hidden = true; }
 }
 window.addEventListener('beforeunload', () => { if (game && game.running) game.save(false); });
 document.addEventListener('visibilitychange', () => { if (document.hidden && game && game.running) game.save(false); });
 showPage('main');
+if (!location.search.includes('quick')) startPanorama();
 window.CV = { B, I, BLOCKS, ITEMS, SaveStore, playWorld, settings };
 // Allow ?world=<name> quick start for testing: creates a throwaway creative world
 if (location.search.includes('quick')) { const params = new URLSearchParams(location.search); if (params.get('rd')) settings.renderDistance = parseInt(params.get('rd')); playWorld({ id: 'quick', name: 'Quick World', seed: parseInt(params.get('seed')) || 12345, gamemode: params.get('mode') || 'creative', difficulty: 2, worldType: params.get('type') || 'default', cheats: true, created: Date.now(), time: parseInt(params.get('time')) || 1000, dim: parseInt(params.get('dim')) || 0 }); }

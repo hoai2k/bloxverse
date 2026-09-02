@@ -26,6 +26,8 @@ starts a throwaway world instantly (used by the headless tests).
 | `player.js` | movement modes, survival stats, mining, item use, combat, XP, death |
 | `inventory.js`, `crafting.js` | inventory containers, 350 shaped/shapeless recipes |
 | `ui.js` | HUD, inventory/crafting/chest/furnace/creative/trade screens, chat, pause, options, death, F3 |
+| `enchant.js` | enchantment table, random rolls, anvil combine/repair; effects are read via `enchantLevel()` in player/inventory/game |
+| `touch.js` | mobile overlay: joystick, look-drag, tap/long-press, buttons (auto-enabled when touch is available) |
 | `commands.js` | `/gamemode /time /weather /give /tp /summon /setblock /fill /kill /xp /effect ...` |
 | `game.js` | loop (20 TPS ticks), input/pointer lock, weather, sleeping, explosions, portals, dimension switch, saving |
 | `save.js` | IndexedDB world/chunk persistence, localStorage settings |
@@ -36,12 +38,11 @@ Working and verified headless (Playwright + swiftshader, see scratch tests): ren
 survival HUD, creative inventory, mining, commands, crafting, furnace, mob spawning/combat, explosions, save → quit → reload.
 
 ## Known gaps / ideas
-- No multiplayer, no redstone circuits, no enchanting/brewing UI (blocks are decorative), no boats/minecarts/riding.
-- Touch controls not implemented.
+- No multiplayer, no redstone circuits, no brewing UI (brewing stand is decorative), no boats/minecarts/riding.
 - Mesher/lighting run on the main thread (≈9 ms/chunk each); moving them to workers would smooth chunk loading.
 - Chunk pipeline uses square rings: generate ≤ R+2, light ≤ R+1, mesh ≤ R (so the full render distance is meshed).
 - Headless testing: the software rasterizer is slow at 1280×720; use an 800×450 viewport and `&rd=3` for tests.
-- Title screen is static (no live panorama yet).
+- Title screen renders a live panorama world (`main.js` startPanorama/stopPanorama) and hands its Renderer to the Game.
 
 ## Testing
 Headless scripts live in the session scratchpad (`test.js`, `test2.js`, `prof.mjs`); they launch `/opt/pw-browsers/chromium-1194`
