@@ -11,15 +11,18 @@ import { Mob } from './entities.js';
 export const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'];
 
 export class Player {
-  constructor(game) {
+  constructor(game, index = 0, input = null) {
     this.game = game; this.world = game.world;
+    this.index = index; this.input = input; this.view = null; this.hud = null;
+    this.name = index === 0 ? 'Player' : 'Player ' + (index + 1);
+    this.screen = null; this.chatOpen = false;
     this.x = 0; this.y = 80; this.z = 0; this.vx = 0; this.vy = 0; this.vz = 0; this.w = 0.6; this.h = 1.8;
     this.yaw = 0; this.pitch = 0; this.onGround = false; this.type = 'player';
     this.inventory = new Inventory();
     this.health = 20; this.maxHealth = 20; this.hunger = 20; this.saturation = 5; this.exhaustion = 0; this.air = 300; this.fire = 0;
     this.xp = 0; this.level = 0; this.xpProgress = 0; this.score = 0;
     this.effects = { poison: 0, regen: 0, absorption: 0, fireRes: 0, speed: 0, strength: 0 };
-    this.dead = false; this.gamemode = 'survival'; this.flying = false; this.noclip = false;
+    this.dead = false; this.deadT = 0; this.gamemode = 'survival'; this.flying = false; this.noclip = false; this.thirdPerson = 0; this.isPlayer = true; this.model = null; this.useHold = 0;
     this.sneaking = false; this.sprinting = false; this.inWater = false; this.headInWater = false; this.inLava = false; this.onLadder = false; this.gliding = false;
     this.spawn = null; this.bedSpawn = null;
     this.breaking = null; this.breakProgress = 0; this.breakCd = 0; this.attackCd = 0; this.useCd = 0; this.eating = 0; this.bowCharge = -1; this.fishing = null;
@@ -27,6 +30,10 @@ export class Player {
     this.jumpCd = 0; this.lastJumpTap = 0; this.stepT = 0; this.sleeping = false; this.sleepT = 0; this.portalT = 0; this.reach = 4.5; this.selectedBox = null; this.lookHit = null; this.lookEntity = null;
     this.stats = { blocksMined: 0, blocksPlaced: 0, distance: 0, deaths: 0 };
   }
+  get screenOpen() { return !!this.screen || this.chatOpen; }
+  get hasControl() { return !this.screenOpen && (this.input ? this.input.kind !== 'keyboard' || this.game.input.locked : false); }
+  swing() { if (this.view) this.game.renderer.swing(this.view); }
+  showBreak(x, y, z, stage) { if (this.view) this.game.renderer.showBreak(this.view, x, y, z, stage); }
   get eyeHeight() { return this.sneaking && !this.flying ? 1.27 : (this.gliding ? 0.6 : 1.62); }
   get eyeY() { return this.y + this.eyeHeight; }
   get lookDir() { const c = Math.cos(this.pitch); return [-Math.sin(this.yaw) * c, Math.sin(this.pitch), -Math.cos(this.yaw) * c]; }
@@ -36,23 +43,25 @@ export class Player {
   get canBuild() { return this.gamemode !== 'spectator' && this.gamemode !== 'adventure'; }
 
   setGamemode(m) {
-    this.gamemode = m; this.game.ui.showToast('Game mode: ' + m[0].toUpperCase() + m.slice(1));
+    this.gamemode = m; this.game.ui.showToastFor(this, 'Game mode: ' + m[0].toUpperCase() + m.slice(1));
     if (m === 'spectator') { this.flying = true; this.noclip = true; } else { this.noclip = false; if (m !== 'creative') this.flying = false; }
-    this.game.renderer.setHandVisible(m !== 'spectator');
+    if (this.view) this.game.renderer.setHandVisible(this.view, m !== 'spectator');
     this.reach = m === 'creative' ? 5 : 4.5;
   }
   give(stack) { const left = this.inventory.add(stack); if (left > 0) this.game.entities.dropItem(this.x, this.y + 1, this.z, makeStack(stack.id, left, stack.dmg), true); this.game.ui.invalidateInventory(); }
 
   // ---------- update ----------
   update(dt) {
-    const g = this.game, w = this.world = g.world, inp = g.input;
+    const g = this.game, w = this.world = g.world, inp = this.input;
+    if (this.dead) this.deadT += dt; else this.deadT = 0;
     this.hurtTimer = Math.max(0, this.hurtTimer - dt); this.attackCd = Math.max(0, this.attackCd - dt); this.useCd = Math.max(0, this.useCd - dt); this.jumpCd = Math.max(0, this.jumpCd - dt); this.breakCd = Math.max(0, this.breakCd - dt);
     if (this.dead) return;
     if (!Number.isFinite(this.x + this.y + this.z + this.yaw + this.pitch)) { console.warn('player state invalid, resetting'); if (!Number.isFinite(this.yaw)) this.yaw = 0; if (!Number.isFinite(this.pitch)) this.pitch = 0; if (!Number.isFinite(this.x + this.y + this.z)) { const sp = this.bedSpawn || this.spawn || { x: 0.5, y: 80, z: 0.5 }; this.x = sp.x; this.y = sp.y; this.z = sp.z; } this.vx = this.vy = this.vz = 0; }
     if (this.sleeping) { this.sleepT += dt; return; }
-    const uiOpen = g.ui.screenOpen;
-    const { fwd, strafe } = inp.axes(uiOpen);
-    const jump = !uiOpen && inp.key('Space'), sneakKey = !uiOpen && (inp.key('ShiftLeft') || inp.key('ShiftRight')), sprintKey = !uiOpen && (inp.key('ControlLeft') || inp.key('KeyR'));
+    const uiOpen = this.screenOpen;
+    const mv = uiOpen ? { fwd: 0, strafe: 0 } : inp.move();
+    const fwd = mv.fwd, strafe = mv.strafe;
+    const jump = !uiOpen && inp.down('jump'), sneakKey = !uiOpen && inp.down('sneak'), sprintKey = !uiOpen && inp.down('sprint');
     const fs = fluidState(w, this, this.eyeY);
     this.inWater = fs.water; this.inLava = fs.lava; this.headInWater = fs.head; this.headInLava = fs.headLava;
     const blockAt = w.getBlock(Math.floor(this.x), Math.floor(this.y), Math.floor(this.z)), blockAtDef = BLOCKS[blockAt];
@@ -67,7 +76,8 @@ export class Player {
     // sneak / sprint
     this.sneaking = sneakKey && !this.flying;
     const wantSprint = (sprintKey || this._sprintToggle) && fwd > 0 && (this.hunger > 6 || this.creative) && !this.sneaking && !inWeb;
-    if (inp.pressed('KeyW')) { if (g.time - (this._lastW || -100) < 6 && fwd > 0) this._sprintToggle = true; this._lastW = g.time; }
+    if (fwd > 0.9 && !this._fwdWas) { if (g.time - (this._lastW || -100) < 6) this._sprintToggle = true; this._lastW = g.time; }
+    this._fwdWas = fwd > 0.9;
     if (fwd <= 0 || this.sneaking) this._sprintToggle = false;
     this.sprinting = wantSprint;
     // eating / bow / fishing hold states
@@ -165,8 +175,8 @@ export class Player {
     // hunger, regen, effects
     this.updateStats(dt);
     // portals
-    if (blockAt === B.nether_portal || blockAt2 === B.nether_portal) { this.portalT += dt; if (this.portalT > (this.creative ? 0.1 : 4)) { this.portalT = -2; g.changeDimension(w.dim === 1 ? 0 : 1); } } else if (this.portalT > 0) this.portalT = Math.max(0, this.portalT - dt * 2); else this.portalT = Math.min(0, this.portalT + dt);
-    if (blockAt === B.end_portal) { g.changeDimension(w.dim === 2 ? 0 : 2); }
+    if (blockAt === B.nether_portal || blockAt2 === B.nether_portal) { this.portalT += dt; if (this.portalT > (this.creative ? 0.1 : 4)) { this.portalT = -2; g.changeDimension(w.dim === 1 ? 0 : 1, null, this); } } else if (this.portalT > 0) this.portalT = Math.max(0, this.portalT - dt * 2); else this.portalT = Math.min(0, this.portalT + dt);
+    if (blockAt === B.end_portal) { g.changeDimension(w.dim === 2 ? 0 : 2, null, this); }
     // look target
     this.updateLook();
   }
@@ -221,20 +231,20 @@ export class Player {
   canHarvest(def) { if (!def.needsTool) return true; const held = this.inventory.held; const tool = held ? getItem(held.id)?.tool : null; if (!tool) return false; const ok = tool.type === def.tool || (def.leaves && tool.type === 'shears') || (def.web && (tool.type === 'sword' || tool.type === 'shears')); return ok && tool.tier >= (def.minTier || 0); }
   mine(dt, active) {
     const g = this.game, w = this.world;
-    if (!active || !this.lookHit || this.lookEntity || !this.canBuild) { if (this.breaking) { this.breaking = null; this.breakProgress = 0; g.renderer.showBreak(0, 0, 0, -1); } return; }
+    if (!active || !this.lookHit || this.lookEntity || !this.canBuild) { if (this.breaking) { this.breaking = null; this.breakProgress = 0; this.showBreak(0, 0, 0, -1); } return; }
     const h = this.lookHit; const def = BLOCKS[h.id];
     if (def.fluid) return;
     if (!this.breaking || this.breaking.x !== h.x || this.breaking.y !== h.y || this.breaking.z !== h.z) { this.breaking = { x: h.x, y: h.y, z: h.z }; this.breakProgress = 0; }
-    if (this.creative) { if (this.breakCd <= 0) { this.breakCd = 0.22; g.breakBlock(h.x, h.y, h.z, this, false); g.renderer.swing(); } return; }
+    if (this.creative) { if (this.breakCd <= 0) { this.breakCd = 0.22; g.breakBlock(h.x, h.y, h.z, this, false); this.swing(); } return; }
     const t = this.breakTimeFor(def, w.getMeta(h.x, h.y, h.z));
     if (t === Infinity) return;
     this.breakProgress += dt / Math.max(0.05, t);
     if (Math.random() < dt * 6) { g.particles.emit(h.px, h.py, h.pz, 'block', 1, h.id); }
-    this._digSound = (this._digSound || 0) + dt; if (this._digSound > 0.25) { this._digSound = 0; g.audio.play('dig', { volume: 0.4 }); g.renderer.swing(); }
+    this._digSound = (this._digSound || 0) + dt; if (this._digSound > 0.25) { this._digSound = 0; g.audio.play('dig', { volume: 0.4 }); this.swing(); }
     if (this.breakProgress >= 1) {
-      g.breakBlock(h.x, h.y, h.z, this, true); this.breaking = null; this.breakProgress = 0; g.renderer.showBreak(0, 0, 0, -1); this.exhaustion += 0.005; this.stats.blocksMined++;
+      g.breakBlock(h.x, h.y, h.z, this, true); this.breaking = null; this.breakProgress = 0; this.showBreak(0, 0, 0, -1); this.exhaustion += 0.005; this.stats.blocksMined++;
       if (def.hardness > 0) { const held = this.inventory.held; if (held && getItem(held.id)?.tool && getItem(held.id).tool.type !== 'bow') { if (this.inventory.damageHeld(1)) g.audio.play('break'); } }
-    } else g.renderer.showBreak(h.x, h.y, h.z, Math.floor(this.breakProgress * 10));
+    } else this.showBreak(h.x, h.y, h.z, Math.floor(this.breakProgress * 10));
   }
 
   // ---------- attack ----------
@@ -252,13 +262,13 @@ export class Player {
     if (item?.tool?.type === 'sword' || item?.tool?.type === 'axe') { if (e.dead) { for (const o of g.entities.list) if (o instanceof Mob && o !== e && !o.dead && o.distTo(e) < 1.5 && item.tool.type === 'sword') o.hurt(1, this, 0.3); } }
     this.lastTarget = e; this.lastTargetT = g.time;
     if (item?.tool && !this.creative && item.tool.type !== 'bow') this.inventory.damageHeld(item.tool.type === 'sword' || item.tool.type === 'axe' ? 1 : 2);
-    this.exhaustion += 0.1; g.renderer.swing(); g.audio.play('hit');
+    this.exhaustion += 0.1; this.swing(); g.audio.play('hit');
     if (this.sprinting) this.sprinting = false;
   }
 
   // ---------- item use ----------
   updateUse(dt) {
-    const g = this.game, inp = g.input; const using = inp.mouse(2) && !g.ui.screenOpen;
+    const g = this.game, inp = this.input; const using = inp.down('use') && !this.screenOpen;
     const held = this.inventory.held; const item = held ? getItem(held.id) : null;
     if (this.eating > 0) {
       if (!using || !item?.food) { this.eating = 0; return; }
@@ -281,28 +291,28 @@ export class Player {
     if (f.regen) { this.effects.regen = f.regen; this.effects.absorption = f.absorption || 4; this.effects.fireRes = f.absorption ? 300 : 0; }
     if (f.teleport) { this.x += (Math.random() - 0.5) * 16; this.z += (Math.random() - 0.5) * 16; this.y = g.world.surfaceY(Math.floor(this.x), Math.floor(this.z)) + 1; g.audio.play('teleport'); }
     if (!this.creative) { this.inventory.consumeHeld(1); if (held.id === I.mushroom_stew || held.id === I.rabbit_stew || held.id === I.beetroot_soup) this.give(makeStack(I.bowl, 1)); if (held.id === I.honey_bottle) this.give(makeStack(I.glass_bottle, 1)); }
-    g.audio.play('burp'); this.useCd = 0.3; g.ui.invalidateInventory();
+    g.audio.play('burp'); this.useCd = 0.3; g.ui.invalidateInventory(this);
   }
   eat(h, s) { if (this.hunger >= 20 && h > 0 && !this.creative && s <= 0) return false; this.hunger = Math.min(20, this.hunger + h); this.saturation = Math.min(this.hunger, this.saturation + s); return true; }
   shootBow(charge) {
     const g = this.game; const p = Math.min(1, charge / 1); const held = this.inventory.held; const a = g.entities.spawnArrow(this, null, 0.4 + p * 1.1, Math.round(2 + p * 6));
     a.damage = (2 + Math.round(p * 6)) * (1 + enchantLevel(held, 'power') * 0.25); if (p >= 1) a.crit = true; if (enchantLevel(held, 'flame')) a.flaming = true; a.punch = enchantLevel(held, 'punch');
     if (!this.creative) { if (!enchantLevel(held, 'infinity')) this.inventory.remove(I.arrow, 1); this.inventory.damageHeld(1); }
-    g.audio.play('bow'); g.ui.invalidateInventory();
+    g.audio.play('bow'); g.ui.invalidateInventory(this);
   }
   // Right click
   use() {
     const g = this.game, w = this.world; if (this.useCd > 0 || this.spectator) return;
     const held = this.inventory.held; const item = held ? getItem(held.id) : null;
     // entity interaction
-    if (this.lookEntity) { if (this.lookEntity.interact(this, held)) { this.useCd = 0.25; g.renderer.swing(); g.ui.invalidateInventory(); } return; }
+    if (this.lookEntity) { if (this.lookEntity.interact(this, held)) { this.useCd = 0.25; this.swing(); g.ui.invalidateInventory(this); } return; }
     const hit = this.lookHit;
     if (hit) {
       const def = BLOCKS[hit.id]; const meta = w.getMeta(hit.x, hit.y, hit.z);
       if (!this.sneaking || !held) {
-        if (def.interact && def.interact !== 'bed' && def.interact !== 'cake' && def.interact !== 'note') { g.openBlockUI(def.interact, hit.x, hit.y, hit.z); this.useCd = 0.3; return; }
-        if (def.onInteract && def.onInteract(w, hit.x, hit.y, hit.z, meta, this)) { this.useCd = 0.25; g.renderer.swing(); return; }
-        if (def.name === 'spawner' && item?.spawnEgg) { const te = w.getTileEntity(hit.x, hit.y, hit.z); te.mob = item.spawnEgg; this.useCd = 0.3; g.ui.showToast('Spawner set to ' + item.spawnEgg); return; }
+        if (def.interact && def.interact !== 'bed' && def.interact !== 'cake' && def.interact !== 'note') { g.openBlockUI(def.interact, hit.x, hit.y, hit.z, this); this.useCd = 0.3; return; }
+        if (def.onInteract && def.onInteract(w, hit.x, hit.y, hit.z, meta, this)) { this.useCd = 0.25; this.swing(); return; }
+        if (def.name === 'spawner' && item?.spawnEgg) { const te = w.getTileEntity(hit.x, hit.y, hit.z); te.mob = item.spawnEgg; this.useCd = 0.3; g.ui.showToastFor(this, 'Spawner set to ' + item.spawnEgg); return; }
       }
       if (!this.canBuild) return;
       if (!item) return;
@@ -321,27 +331,27 @@ export class Player {
         if (hit.id === B.campfire) { this.toolUsed(); return; }
         if (w.getBlock(ax, ay, az) === 0 && (def.opaque || def.flammable || hit.face === 2)) { w.setBlock(ax, ay, az, B.fire, 0); this.toolUsed(); g.audio.play('fire'); return; }
       }
-      if (item.bonemeal) { if (applyBoneMeal(w, hit.x, hit.y, hit.z, Math.random)) { if (!this.creative) this.inventory.consumeHeld(1); g.particles.emit(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 'happy', 10); this.useCd = 0.25; g.ui.invalidateInventory(); } return; }
+      if (item.bonemeal) { if (applyBoneMeal(w, hit.x, hit.y, hit.z, Math.random)) { if (!this.creative) this.inventory.consumeHeld(1); g.particles.emit(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 'happy', 10); this.useCd = 0.25; g.ui.invalidateInventory(this); } return; }
       if (item.bucket) return this.useBucket(item, hit, ax, ay, az);
-      if (item.spawnEgg) { g.entities.spawnMob(item.spawnEgg, ax + 0.5, ay, az + 0.5); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.2; g.ui.invalidateInventory(); return; }
-      if (item.place) { const bid = B[item.place]; const pl = placementFor(w, { id: bid }, hit, this); if (pl) { for (const p of pl) w.setBlock(p.x, p.y, p.z, p.id, p.meta); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.2; g.audio.play('step_grass'); g.renderer.swing(); g.ui.invalidateInventory(); } return; }
+      if (item.spawnEgg) { g.entities.spawnMob(item.spawnEgg, ax + 0.5, ay, az + 0.5); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.2; g.ui.invalidateInventory(this); return; }
+      if (item.place) { const bid = B[item.place]; const pl = placementFor(w, { id: bid }, hit, this); if (pl) { for (const p of pl) w.setBlock(p.x, p.y, p.z, p.id, p.meta); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.2; g.audio.play('step_grass'); this.swing(); g.ui.invalidateInventory(this); } return; }
       if (item.id === I.ender_eye && hit.id === B.end_portal_frame && !(meta & 4)) { w.setMeta(hit.x, hit.y, hit.z, meta | 4); if (!this.creative) this.inventory.consumeHeld(1); g.tryActivateEndPortal(hit.x, hit.y, hit.z); this.useCd = 0.3; return; }
       if (isBlockItem(held.id)) return this.placeBlock(held, hit);
     }
     // no block hit: throwables, bucket into water at range, ender pearl etc.
     if (!item) return;
-    if (item.throwable || item.id === I.egg || item.id === I.ender_pearl) { g.entities.throwItem(this, item.id === I.egg ? 'egg' : item.id === I.ender_pearl ? 'ender_pearl' : 'snowball'); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.25; g.audio.play('bow', { volume: 0.4 }); g.renderer.swing(); g.ui.invalidateInventory(); return; }
+    if (item.throwable || item.id === I.egg || item.id === I.ender_pearl) { g.entities.throwItem(this, item.id === I.egg ? 'egg' : item.id === I.ender_pearl ? 'ender_pearl' : 'snowball'); if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.25; g.audio.play('bow', { volume: 0.4 }); this.swing(); g.ui.invalidateInventory(this); return; }
     if (item.tool?.type === 'fishing_rod') return this.fish();
     if (item.id === I.firework_rocket && this.gliding) { const d = this.lookDir; this.vx += d[0] * 15; this.vy += d[1] * 15; this.vz += d[2] * 15; if (!this.creative) this.inventory.consumeHeld(1); this.useCd = 0.3; g.particles.emit(this.x, this.y, this.z, 'flame', 10); return; }
-    if (item.id === I.ender_eye) { const d = this.lookDir; g.particles.emit(this.x + d[0] * 2, this.eyeY, this.z + d[2] * 2, 'portal', 20); g.ui.showToast(w.dim === 0 ? 'The eye points toward the End portal... use it on an End Portal Frame' : 'Nothing happens'); this.useCd = 0.5; return; }
+    if (item.id === I.ender_eye) { const d = this.lookDir; g.particles.emit(this.x + d[0] * 2, this.eyeY, this.z + d[2] * 2, 'portal', 20); g.ui.showToastFor(this, w.dim === 0 ? 'The eye points toward the End portal... use it on an End Portal Frame' : 'Nothing happens'); this.useCd = 0.5; return; }
     if (item.bucket && item.bucket !== 'empty') { const d = this.lookDir; const hit2 = w.raycast(this.x, this.eyeY, this.z, d[0], d[1], d[2], this.reach, true); if (hit2) { const n = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]][hit2.face] || [0, 1, 0]; return this.useBucket(item, hit2, hit2.x + n[0], hit2.y + n[1], hit2.z + n[2]); } }
   }
-  toolUsed() { const g = this.game; if (!this.creative) this.inventory.damageHeld(1); this.useCd = 0.25; g.renderer.swing(); g.ui.invalidateInventory(); }
+  toolUsed() { const g = this.game; if (!this.creative) this.inventory.damageHeld(1); this.useCd = 0.25; this.swing(); g.ui.invalidateInventory(this); }
   useBucket(item, hit, ax, ay, az) {
     const g = this.game, w = this.world;
     if (item.bucket === 'empty') {
       const id = w.getBlock(hit.x, hit.y, hit.z);
-      if ((id === B.water || id === B.lava) && (w.getMeta(hit.x, hit.y, hit.z) & 7) === 0) { w.setBlock(hit.x, hit.y, hit.z, 0, 0); if (!this.creative) { this.inventory.consumeHeld(1); this.give(makeStack(id === B.water ? I.water_bucket : I.lava_bucket, 1)); } g.audio.play('bucket'); this.useCd = 0.3; g.ui.invalidateInventory(); return; }
+      if ((id === B.water || id === B.lava) && (w.getMeta(hit.x, hit.y, hit.z) & 7) === 0) { w.setBlock(hit.x, hit.y, hit.z, 0, 0); if (!this.creative) { this.inventory.consumeHeld(1); this.give(makeStack(id === B.water ? I.water_bucket : I.lava_bucket, 1)); } g.audio.play('bucket'); this.useCd = 0.3; g.ui.invalidateInventory(this); return; }
       return;
     }
     const target = BLOCKS[w.getBlock(hit.x, hit.y, hit.z)].replaceable ? [hit.x, hit.y, hit.z] : [ax, ay, az];
@@ -349,12 +359,12 @@ export class Player {
     if (item.bucket === 'water' && w.dim === 1) { g.particles.emit(target[0] + 0.5, target[1] + 0.5, target[2] + 0.5, 'smoke', 10); g.audio.play('fire'); if (!this.creative) { this.inventory.consumeHeld(1); this.give(makeStack(I.bucket, 1)); } this.useCd = 0.3; return; }
     w.setBlock(target[0], target[1], target[2], item.bucket === 'water' ? B.water : B.lava, 0);
     if (!this.creative) { this.inventory.consumeHeld(1); this.give(makeStack(I.bucket, 1)); }
-    g.audio.play('bucket'); this.useCd = 0.3; g.ui.invalidateInventory();
+    g.audio.play('bucket'); this.useCd = 0.3; g.ui.invalidateInventory(this);
   }
   fish() {
-    const g = this.game; if (this.fishing) { const waited = g.time - this.fishing.t; this.fishing = null; this.useCd = 0.3; if (waited > 100 + this.fishing_wait) { const r = Math.random(); const item = r < 0.6 ? I.cod : r < 0.85 ? I.salmon : r < 0.9 ? I.pufferfish : r < 0.95 ? I.tropical_fish : r < 0.98 ? I.string : I.enchanted_book; this.give(makeStack(item, 1)); g.entities.spawnXP(this.x, this.y, this.z, 1 + Math.floor(Math.random() * 6)); g.audio.play('splash'); if (!this.creative) this.inventory.damageHeld(1); g.ui.showToast('You caught something!'); } else g.ui.showToast('Nothing on the line...'); return; }
+    const g = this.game; if (this.fishing) { const waited = g.time - this.fishing.t; this.fishing = null; this.useCd = 0.3; if (waited > 100 + this.fishing_wait) { const r = Math.random(); const item = r < 0.6 ? I.cod : r < 0.85 ? I.salmon : r < 0.9 ? I.pufferfish : r < 0.95 ? I.tropical_fish : r < 0.98 ? I.string : I.enchanted_book; this.give(makeStack(item, 1)); g.entities.spawnXP(this.x, this.y, this.z, 1 + Math.floor(Math.random() * 6)); g.audio.play('splash'); if (!this.creative) this.inventory.damageHeld(1); g.ui.showToastFor(this, 'You caught something!'); } else g.ui.showToastFor(this, 'Nothing on the line...'); return; }
     const d = this.lookDir; const hit = this.world.raycast(this.x, this.eyeY, this.z, d[0], d[1], d[2], 12, true);
-    if (hit && hit.id === B.water) { this.fishing = { t: g.time, x: hit.x, y: hit.y, z: hit.z }; this.fishing_wait = 100 + Math.random() * 400; this.useCd = 0.3; g.audio.play('splash', { volume: 0.4 }); g.ui.showToast('Fishing... right-click again when it bites'); setTimeout(() => { if (this.fishing) g.particles.emit(this.fishing.x + 0.5, this.fishing.y + 0.9, this.fishing.z + 0.5, 'water', 10); }, (100 + this.fishing_wait) * 50); }
+    if (hit && hit.id === B.water) { this.fishing = { t: g.time, x: hit.x, y: hit.y, z: hit.z }; this.fishing_wait = 100 + Math.random() * 400; this.useCd = 0.3; g.audio.play('splash', { volume: 0.4 }); g.ui.showToastFor(this, 'Fishing... right-click again when it bites'); setTimeout(() => { if (this.fishing) g.particles.emit(this.fishing.x + 0.5, this.fishing.y + 0.9, this.fishing.z + 0.5, 'water', 10); }, (100 + this.fishing_wait) * 50); }
   }
   placeBlock(held, hit) {
     const g = this.game, w = this.world;
@@ -364,7 +374,7 @@ export class Player {
     const d = BLOCKS[pl[0].id];
     if (d.container || d.name === 'spawner') { const te = w.getTileEntity(pl[0].x, pl[0].y, pl[0].z); if (held.te) Object.assign(te, held.te); }
     if (!this.creative) this.inventory.consumeHeld(1);
-    this.stats.blocksPlaced++; this.useCd = 0.2; g.audio.play('place'); g.renderer.swing(); g.ui.invalidateInventory();
+    this.stats.blocksPlaced++; this.useCd = 0.2; g.audio.play('place'); this.swing(); g.ui.invalidateInventory(this);
   }
 
   // ---------- damage / death ----------
@@ -383,21 +393,21 @@ export class Player {
     if (this.effects.absorption > 0) { const a = Math.min(this.effects.absorption, amount); this.effects.absorption -= a; amount -= a; }
     this.health -= amount; this.hurtTimer = 0.5;
     if (source && source.x !== undefined) { const dx = this.x - source.x, dz = this.z - source.z, d = Math.hypot(dx, dz) || 1; this.vx += dx / d * 5; this.vz += dz / d * 5; this.vy += 3; this.lastAttacker = source; this.lastAttackerT = g.time; }
-    g.audio.play('hurt'); g.ui.damageFlash();
+    g.audio.play('hurt'); g.ui.damageFlash(this);
     if (this.health <= 0) {
       const totem = (this.inventory.held && this.inventory.held.id === I.totem_of_undying) ? this.inventory.held : (this.inventory.offhand[0] && this.inventory.offhand[0].id === I.totem_of_undying ? this.inventory.offhand[0] : null);
-      if (totem) { totem.count--; if (totem.count <= 0) { if (this.inventory.held === totem) this.inventory.setHeld(null); else this.inventory.offhand[0] = null; } this.health = 1; this.effects.regen = 40; this.effects.absorption = 8; this.effects.fireRes = 40; g.audio.play('totem'); g.ui.showTitle('', 'The Totem of Undying saved you'); g.ui.invalidateInventory(); return true; }
+      if (totem) { totem.count--; if (totem.count <= 0) { if (this.inventory.held === totem) this.inventory.setHeld(null); else this.inventory.offhand[0] = null; } this.health = 1; this.effects.regen = 40; this.effects.absorption = 8; this.effects.fireRes = 40; g.audio.play('totem'); g.ui.showTitle('', 'The Totem of Undying saved you', 4, this); g.ui.invalidateInventory(this); return true; }
       this.die(source, opts);
     }
     return true;
   }
   die(source, opts = {}) {
     const g = this.game; this.dead = true; this.health = 0; this.stats.deaths++;
-    this.eating = 0; this.bowCharge = -1; this.breaking = null; g.renderer.showBreak(0, 0, 0, -1);
+    this.eating = 0; this.bowCharge = -1; this.breaking = null; this.showBreak(0, 0, 0, -1);
     let cause = 'died';
     if (opts.fall) cause = 'fell from a high place'; else if (opts.fire) cause = 'burned to death'; else if (opts.drown) cause = 'drowned'; else if (opts.starve) cause = 'starved to death'; else if (opts.void) cause = 'fell out of the world'; else if (opts.poison) cause = 'was poisoned'; else if (opts.explosion) cause = 'blew up'; else if (source && source.type) cause = 'was slain by ' + (source.def ? source.def.displayName || source.type.replace(/_/g, ' ') : source.type);
     if (!this.creative) { for (let i = 0; i < 36; i++) { const s = this.inventory.slots[i]; if (s) g.entities.dropItem(this.x, this.y + 0.5, this.z, s, true); this.inventory.slots[i] = null; } for (let i = 0; i < 4; i++) { const s = this.inventory.armor[i]; if (s) g.entities.dropItem(this.x, this.y + 0.5, this.z, s, true); this.inventory.armor[i] = null; } if (this.inventory.offhand[0]) { g.entities.dropItem(this.x, this.y + 0.5, this.z, this.inventory.offhand[0], true); this.inventory.offhand[0] = null; } g.entities.spawnXP(this.x, this.y + 0.5, this.z, Math.min(100, this.level * 7)); }
-    g.audio.play('death'); g.onPlayerDeath(cause);
+    g.audio.play('death'); g.onPlayerDeath(cause, this);
   }
   respawn() {
     const g = this.game; this.dead = false; this.health = this.maxHealth; this.hunger = 20; this.saturation = 5; this.exhaustion = 0; this.air = 300; this.fire = 0; this.xp = 0; this.level = 0; this.xpProgress = 0; for (const k of Object.keys(this.effects)) this.effects[k] = 0;
@@ -412,6 +422,6 @@ export class Player {
   addXP(n) { n = this.inventory.mend(n); if (n <= 0) return; this.xp += n; this.score += n; let need = this.xpForLevel(this.level); this.xpProgress += n; while (this.xpProgress >= need) { this.xpProgress -= need; this.level++; need = this.xpForLevel(this.level); this.game.audio.play('levelup'); } }
   setLevel(l) { this.level = l; this.xpProgress = 0; }
 
-  serialize() { return { x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, health: this.health, hunger: this.hunger, saturation: this.saturation, xp: this.xp, level: this.level, xpProgress: this.xpProgress, gamemode: this.gamemode, flying: this.flying, inventory: this.inventory.serialize(), spawn: this.spawn, bedSpawn: this.bedSpawn, effects: this.effects, stats: this.stats, score: this.score, air: this.air }; }
+  serialize() { return { index: this.index, x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, health: this.health, hunger: this.hunger, saturation: this.saturation, xp: this.xp, level: this.level, xpProgress: this.xpProgress, gamemode: this.gamemode, flying: this.flying, inventory: this.inventory.serialize(), spawn: this.spawn, bedSpawn: this.bedSpawn, effects: this.effects, stats: this.stats, score: this.score, air: this.air }; }
   deserialize(d) { if (!d) return; Object.assign(this, { x: d.x, y: d.y, z: d.z, yaw: d.yaw || 0, pitch: d.pitch || 0, health: d.health ?? 20, hunger: d.hunger ?? 20, saturation: d.saturation ?? 5, xp: d.xp || 0, level: d.level || 0, xpProgress: d.xpProgress || 0, flying: !!d.flying, spawn: d.spawn || null, bedSpawn: d.bedSpawn || null, score: d.score || 0, air: d.air ?? 300 }); if (d.effects) Object.assign(this.effects, d.effects); if (d.stats) Object.assign(this.stats, d.stats); this.inventory.deserialize(d.inventory); this.setGamemode(d.gamemode || 'survival'); }
 }

@@ -29,7 +29,7 @@ export class TouchControls {
     // look / mine / place on the canvas
     const c = g.canvas; let lookId = null, last = null, start = null, moved = false, pressTimer = null, mining = false;
     c.addEventListener('touchstart', (e) => {
-      if (!this.active || g.ui.screenOpen) return; e.preventDefault();
+      if (!this.active || g.anyScreenOpen()) return; e.preventDefault();
       const t = e.changedTouches[0]; if (lookId !== null) return; lookId = t.identifier; last = { x: t.clientX, y: t.clientY }; start = { ...last, t: performance.now() }; moved = false;
       pressTimer = setTimeout(() => { if (!moved) { mining = true; inp.buttons.add(0); if (g.player.lookEntity) g.player.attack(); } }, 280);
     }, { passive: false });
@@ -37,20 +37,20 @@ export class TouchControls {
       if (!this.active) return; e.preventDefault();
       for (const t of e.changedTouches) if (t.identifier === lookId) { const dx = t.clientX - last.x, dy = t.clientY - last.y; if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > 12) moved = true; inp.dx += dx * 2.2; inp.dy += dy * 2.2; last = { x: t.clientX, y: t.clientY }; }
     }, { passive: false });
-    const endLook = (e) => { for (const t of e.changedTouches) if (t.identifier === lookId) { lookId = null; clearTimeout(pressTimer); if (mining) { mining = false; inp.buttons.delete(0); } else if (!moved && performance.now() - start.t < 280 && !g.ui.screenOpen) { if (g.player.lookEntity) g.player.attack(); else g.onMouseDown(2); } } };
+    const endLook = (e) => { for (const t of e.changedTouches) if (t.identifier === lookId) { lookId = null; clearTimeout(pressTimer); if (mining) { mining = false; inp.buttons.delete(0); } else if (!moved && performance.now() - start.t < 280 && !g.anyScreenOpen()) { if (g.player.lookEntity) g.player.attack(); else g.onMouseDown(2, g.player); } } };
     c.addEventListener('touchend', endLook); c.addEventListener('touchcancel', endLook);
     // buttons
     const hold = (id, code) => { const b = this.root.querySelector(id); b.addEventListener('touchstart', (e) => { e.preventDefault(); inp.keys.add(code); b.classList.add('on'); }, { passive: false }); const up = (e) => { e.preventDefault(); inp.keys.delete(code); b.classList.remove('on'); }; b.addEventListener('touchend', up); b.addEventListener('touchcancel', up); };
     hold('#tb-jump', 'Space');
     const sneak = this.root.querySelector('#tb-sneak'); sneak.addEventListener('touchstart', (e) => { e.preventDefault(); if (inp.keys.has('ShiftLeft')) { inp.keys.delete('ShiftLeft'); sneak.classList.remove('on'); } else { inp.keys.add('ShiftLeft'); sneak.classList.add('on'); } }, { passive: false });
     const tap = (id, fn) => { const b = this.root.querySelector(id); b.addEventListener('touchstart', (e) => { e.preventDefault(); fn(); }, { passive: false }); };
-    tap('#tb-inv', () => { if (g.ui.screenOpen) g.ui.closeScreen(); else g.ui.openInventory(); });
-    tap('#tb-chat', () => { if (g.ui.chatOpen) g.ui.closeChat(); else g.ui.openChat(''); });
-    tap('#tb-drop', () => g.dropHeld(false));
-    tap('#tb-cam', () => { g.thirdPerson = (g.thirdPerson + 1) % 3; });
+    tap('#tb-inv', () => { if (g.player.screen) g.ui.closeScreen(g.player); else g.ui.openInventory(g.player); });
+    tap('#tb-chat', () => { if (g.ui.chatOpen) g.ui.closeChat(); else g.ui.openChat(g.player, ''); });
+    tap('#tb-drop', () => g.dropHeld(g.player, false));
+    tap('#tb-cam', () => { g.player.thirdPerson = (g.player.thirdPerson + 1) % 3; });
     // hotbar taps select slots (the hotbar has pointer-events none by default in HUD; enable for touch)
-    const hb = document.getElementById('hotbar'); hb.style.pointerEvents = 'auto';
-    hb.addEventListener('touchstart', (e) => { const el = e.target.closest('.slot'); if (!el) return; const idx = [...hb.children].indexOf(el); if (idx >= 0) { if (g.player.inventory.selected === idx) g.player.use(); g.player.inventory.selected = idx; } e.preventDefault(); }, { passive: false });
+    const hb = document.querySelector('.pview .hotbar') || document.createElement('div'); hb.style.pointerEvents = 'auto';
+    hb.addEventListener('touchstart', (e) => { const el = e.target.closest('.slot'); if (!el) return; const idx = [...el.parentElement.children].indexOf(el); if (idx >= 0) { if (g.player.inventory.selected === idx) g.player.use(); g.player.inventory.selected = idx; } e.preventDefault(); }, { passive: false });
   }
   update() { const inp = this.game.input; if (this.sprint) inp.keys.add('ControlLeft'); else inp.keys.delete('ControlLeft'); }
 }

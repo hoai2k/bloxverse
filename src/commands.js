@@ -1,8 +1,87 @@
 // Chat commands (require cheats enabled in the world).
 import { B, BLOCKS } from './blocks.js';
-import { I, resolveId, makeStack, getItem, itemName } from './items.js';
+import { I, ITEMS, resolveId, makeStack, getItem, itemName } from './items.js';
+import { ENCHANTS, applicable, applyEnchant } from './enchant.js';
 import { MOBS } from './entities.js';
 import { GAMEMODES } from './player.js';
+import { BIOMES } from './worldgen.js';
+
+
+// ---------- command specs (used for execution help and chat auto-complete) ----------
+// Each arg is a type name resolved by completions() below.
+export const COMMAND_SPECS = [
+  { name: 'help', args: [], desc: 'List every command' },
+  { name: 'gamemode', alias: 'gm', args: ['gamemode'], desc: 'Change your game mode' },
+  { name: 'time', args: ['timeAction', 'timeValue'], desc: 'Set or advance the time of day' },
+  { name: 'weather', args: ['weather'], desc: 'Set the weather' },
+  { name: 'difficulty', args: ['difficulty'], desc: 'Change the difficulty' },
+  { name: 'give', args: ['item', 'int'], desc: 'Give yourself items' },
+  { name: 'tp', alias: 'teleport', args: ['coordOrSpawn', 'coord', 'coord'], desc: 'Teleport to coordinates' },
+  { name: 'summon', args: ['mob', 'coord', 'coord', 'coord'], desc: 'Spawn a mob' },
+  { name: 'setblock', args: ['coord', 'coord', 'coord', 'block', 'int'], desc: 'Place a block' },
+  { name: 'fill', args: ['coord', 'coord', 'coord', 'coord', 'coord', 'coord', 'block'], desc: 'Fill a region with a block' },
+  { name: 'kill', args: ['killTarget'], desc: 'Kill yourself or every entity' },
+  { name: 'clear', args: [], desc: 'Empty your inventory' },
+  { name: 'xp', alias: 'experience', args: ['int'], desc: 'Give experience (suffix L for levels)' },
+  { name: 'heal', args: [], desc: 'Restore health and hunger' },
+  { name: 'effect', args: ['effect', 'int'], desc: 'Apply a status effect' },
+  { name: 'enchant', args: ['enchantment', 'int'], desc: 'Enchant the held item' },
+  { name: 'spawnpoint', args: [], desc: 'Set your respawn point here' },
+  { name: 'seed', args: [], desc: 'Show the world seed' },
+  { name: 'locate', args: ['locatable'], desc: 'Find the nearest biome or village' },
+  { name: 'dimension', alias: 'dim', args: ['dimension'], desc: 'Travel to another dimension' },
+  { name: 'fly', args: [], desc: 'Toggle flight' },
+  { name: 'say', args: [], desc: 'Broadcast a message' },
+];
+const VALUES = {
+  gamemode: () => ['survival', 'creative', 'adventure', 'spectator'],
+  timeAction: () => ['set', 'add', 'query'],
+  timeValue: () => ['day', 'noon', 'night', 'midnight', 'sunrise'],
+  weather: () => ['clear', 'rain', 'thunder'],
+  difficulty: () => ['peaceful', 'easy', 'normal', 'hard'],
+  killTarget: () => ['@e'],
+  dimension: () => ['overworld', 'nether', 'end'],
+  effect: () => ['poison', 'regen', 'fireRes', 'speed', 'strength', 'absorption', 'clear'],
+  coordOrSpawn: () => ['spawn', '~'],
+  coord: () => ['~'],
+  int: () => [],
+  item: () => ITEM_NAMES,
+  block: () => BLOCK_NAMES,
+  mob: () => Object.keys(MOBS),
+  enchantment: () => Object.keys(ENCHANTS),
+  locatable: () => Object.keys(BIOMES).concat(['village']),
+};
+let BLOCK_NAMES = null, ITEM_NAMES = null;
+function ensureNames() {
+  if (BLOCK_NAMES) return;
+  BLOCK_NAMES = BLOCKS.filter(b => b.id && !b.hidden).map(b => b.name);
+  ITEM_NAMES = BLOCK_NAMES.concat([...ITEMS.values()].map(i => i.name));
+}
+
+// Returns { options: [{value, label}], start } for the token under the caret.
+export function completeCommand(game, text, caret = text.length) {
+  ensureNames();
+  if (!text.startsWith('/')) return null;
+  const before = text.slice(0, caret);
+  const tokens = before.split(/\s+/);
+  const partial = tokens[tokens.length - 1];
+  const start = caret - partial.length;
+  const mk = (list) => list.filter(v => v.toLowerCase().startsWith(partial.toLowerCase())).slice(0, 80).map(v => ({ value: v, label: v }));
+  if (tokens.length === 1) {
+    const q = partial.slice(1).toLowerCase();
+    const names = [];
+    for (const c of COMMAND_SPECS) { names.push(c.name); if (c.alias) names.push(c.alias); }
+    return { start: start + 1, options: names.filter(n => n.startsWith(q)).map(n => ({ value: n, label: '/' + n, desc: (COMMAND_SPECS.find(c => c.name === n || c.alias === n) || {}).desc })) };
+  }
+  const cmdName = tokens[0].slice(1).toLowerCase();
+  const spec = COMMAND_SPECS.find(c => c.name === cmdName || c.alias === cmdName);
+  if (!spec) return { start, options: [] };
+  const argIndex = tokens.length - 2;
+  const type = spec.args[Math.min(argIndex, spec.args.length - 1)];
+  if (!type || argIndex >= spec.args.length) return { start, options: [] };
+  const vals = VALUES[type] ? VALUES[type]() : [];
+  return { start, options: mk(vals), type };
+}
 
 const HELP = [
   '/gamemode <survival|creative|adventure|spectator>  (alias /gm s|c|a|sp)', '/time set <day|noon|night|midnight|ticks> | /time add <ticks>', '/weather <clear|rain|thunder>',
@@ -11,9 +90,9 @@ const HELP = [
   '/spawnpoint', '/seed', '/locate <biome|village>', '/dimension <overworld|nether|end>', '/help',
 ];
 
-export function runCommand(game, line) {
+export function runCommand(game, line, player = null) {
   const parts = line.slice(1).trim().split(/\s+/); const cmd = parts[0].toLowerCase(); const a = parts.slice(1);
-  const p = game.player, w = game.world; const say = (m) => game.ui.chatMessage(m, '#ffff55'); const err = (m) => game.ui.chatMessage(m, '#ff5555');
+  const p = player || game.player, w = game.world; const say = (m) => game.ui.chatMessage(m, '#ffff55'); const err = (m) => game.ui.chatMessage(m, '#ff5555');
   if (!game.cheats && !['help', 'seed', 'locate'].includes(cmd)) return err('Cheats are not enabled in this world');
   const num = (s, rel) => { if (s === undefined) return NaN; if (s[0] === '~') return rel + (s.length > 1 ? parseFloat(s.slice(1)) : 0); return parseFloat(s); };
   try {
@@ -33,6 +112,7 @@ export function runCommand(game, line) {
       case 'xp': case 'experience': { const s = a[0] || '0'; if (s.endsWith('L') || s.endsWith('l')) { p.setLevel(Math.max(0, p.level + parseInt(s))); say('Levels: ' + p.level); } else { p.addXP(parseInt(s) || 0); say('Gave ' + s + ' xp'); } break; }
       case 'heal': p.health = p.maxHealth; p.hunger = 20; p.saturation = 10; p.fire = 0; say('Healed'); break;
       case 'effect': { const e = a[0]; const secs = parseInt(a[1]) || 30; if (e === 'clear') { for (const k of Object.keys(p.effects)) p.effects[k] = 0; say('Effects cleared'); break; } if (!(e in p.effects)) return err('Effects: ' + Object.keys(p.effects).join(', ') + ', clear'); p.effects[e] = e === 'absorption' ? secs : secs; say('Applied ' + e); break; }
+      case 'enchant': { const held = p.inventory.held; if (!held) return err('Hold an item first'); const key = a[0]; if (!ENCHANTS[key]) return err('Enchantments: ' + Object.keys(ENCHANTS).join(', ')); const lvl = Math.max(1, Math.min(ENCHANTS[key].max, parseInt(a[1]) || 1)); const st = applyEnchant(held, { [key]: lvl }); p.inventory.setHeld(st); game.ui.invalidateInventory(p); say(`Enchanted with ${ENCHANTS[key].name} ${lvl}`); break; }
       case 'spawnpoint': p.spawn = { x: p.x, y: p.y, z: p.z, dim: w.dim }; p.bedSpawn = null; say('Spawn point set'); break;
       case 'seed': say('Seed: ' + game.seed); break;
       case 'locate': { const target = a[0]; if (!target) return err('Usage: /locate <biome name|village>'); const g = w.gen; let best = null; for (let r = 0; r < 60 && !best; r++) { for (let i = 0; i < 24; i++) { const ang = i / 24 * Math.PI * 2; const x = Math.floor(p.x + Math.cos(ang) * r * 32), z = Math.floor(p.z + Math.sin(ang) * r * 32); const bm = g.biomeAt(x, z); if (bm.id === target || (target === 'village' && bm.village && Math.random() < 0.1)) { best = [x, z]; break; } } } if (best) say(`Nearest ${target}: ${best[0]}, ~, ${best[1]}  (${Math.round(Math.hypot(best[0] - p.x, best[1] - p.z))} blocks away)`); else err('Could not find ' + target + ' nearby'); break; }

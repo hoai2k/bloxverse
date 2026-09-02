@@ -32,17 +32,32 @@ Open **http://localhost:8080**. It also deploys straight to GitHub Pages from th
 | **Mobs** | Zombies, husks, drowned, skeletons, strays, creepers (they explode), spiders & cave spiders, endermen (teleport, hate water), slimes (split), witches, phantoms, blazes, ghasts, zombified piglins (swarm when hit), cows, pigs, sheep (shear & dye), chickens (eggs), horses, wolves (tame with bones, they fight for you), cats, bees, villagers, iron golems. Breeding, babies, burning in daylight, spawn rules by light/biome/dimension. |
 | **Survival** | Health, hunger & saturation, regen, armor, fall damage, drowning, fire, lava, poison, XP orbs & levels, sleeping in beds to skip the night (phantoms come if you don't), respawn points, death screen with cause. |
 | **Movement** | Walk, sprint (double-tap W), sneak (edge-safe), auto-jump, swim, climb ladders & vines, creative flight (double-tap space), elytra gliding, slipping on ice, bouncing on slime. First / third person (F5). |
+| **Local multiplayer** | Up to **4 players on one screen**. Press START on any spare Xbox-style controller to drop in at any time; split-screen re-lays out automatically (stacked for 2, three-up, quadrants for 4). Every player gets their own camera, HUD, inventory and screens, and mobs chase whoever is nearest. Hold BACK and press B to drop out. |
+| **Controllers** | Full Xbox/standard gamepad support in menus and in game: sticks to move and look, A jump, LB sneak, L3 sprint, RT mine/attack, LT place/use, Y inventory, B drop, X offhand, D-pad hotbar, R3 camera, START pause. Inventories, chests, crafting, the pause menu and the title screen are all navigable with the pad; slots highlight as you move. |
 | **Touch** | On phones and tablets: virtual joystick, drag to look, tap to place, long-press to mine, jump/sneak/inventory/chat buttons. |
 | **Persistence** | Multiple worlds saved in IndexedDB (chunks, tile entities, mobs, player, time, weather), autosave, settings in localStorage. |
+| **Auto-complete** | The chat box completes commands and their arguments (blocks, items, mobs, biomes, effects, enchantments, game modes...) as you type. Tab completes, arrow keys pick from the list. |
 | **Commands** | `/gamemode /time /weather /difficulty /give /tp /summon /setblock /fill /kill /clear /xp /heal /effect /spawnpoint /seed /locate /dimension` (see `/help`). |
 
 ## ⌨️ Controls
 
-`WASD` move · `Space` jump · `Shift` sneak · `Ctrl` / double-`W` sprint · `E` inventory · `Q` drop · `F` swap offhand ·
-`1-9` / scroll hotbar · Left click mine / attack · Right click place / use · Middle click pick block ·
-`T` chat · `/` command · `F1` hide HUD · `F2` screenshot · `F3` debug · `F5` camera · `F11` fullscreen · `Esc` menu
+**Keyboard & mouse** — `WASD` move · `Space` jump · `Shift` sneak · `Ctrl` / double-`W` sprint · `E` inventory · `Q` drop ·
+`F` swap offhand · `1-9` / scroll hotbar · Left click mine / attack · Right click place / use · Middle click pick block ·
+`T` chat · `/` command (`Tab` completes) · `F1` hide HUD · `F2` screenshot · `F3` debug · `F5` camera · `F11` fullscreen · `Esc` menu
+
+**Controller** — left stick move · right stick look · `A` jump · `LB` sneak · `L3` sprint · `RT` mine/attack · `LT` place/use ·
+`Y` inventory · `B` drop · `X` offhand · `D-pad ←/→` hotbar · `R3` camera · `START` pause · `BACK` chat.
+In menus: `D-pad` move · `A` select/take · `X` split stack · `Y` quick-move · `B` back · `LB`/`RB` switch tabs.
+**Press `START` on an unused controller to join the game in split-screen; hold `BACK` and press `B` to leave.**
 
 The title screen shows a live, slowly rotating procedurally generated world.
+
+## 📦 Versions
+
+The title screen shows the current version and the name of the latest major update, and the **Update Log**
+(title screen or pause menu) lists every release. Major content updates — new biomes, mobs, dimensions or systems —
+bump the minor version (1.0 → 1.1), get a name and a fresh title-screen panorama; smaller updates bump the patch
+number. Everything is driven by `src/version.js`.
 
 ## 🧱 Tech
 

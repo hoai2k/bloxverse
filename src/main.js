@@ -7,6 +7,7 @@ import { B, BLOCKS } from './blocks.js';
 import { I, ITEMS } from './items.js';
 import { Renderer } from './renderer.js';
 import { World } from './world.js';
+import { VERSION, UPDATE_NAME, UPDATE_VERSION, CHANGELOG, PANORAMA, hasUnreadUpdate, markUpdateSeen } from './version.js';
 
 const $ = (s) => document.querySelector(s);
 const settings = Settings.load();
@@ -18,12 +19,13 @@ function startPanorama() {
   try {
     if (!pano) {
       const renderer = game ? game.renderer : new Renderer(canvas);
-      const world = new World({ seed: 20240901, dim: 0, worldType: 'default', renderDistance: 4 });
+      const world = new World({ seed: PANORAMA.seed, dim: 0, worldType: 'default', renderDistance: 4 });
       world.onMesh = (c, d) => { if (pano && pano.world === world) renderer.updateChunk(c, d); };
       world.onUnload = (c) => renderer.removeChunk(c);
-      const h = world.gen.heightAt(8, 8);
-      pano = { renderer, world, t: 0, cam: [8.5, Math.max(h, 63) + 9, 8.5], running: false };
-      renderer.setHandVisible(false); renderer.showSelection(null); renderer.rain.visible = false;
+      const h = world.gen.heightAt(Math.floor(PANORAMA.x), Math.floor(PANORAMA.z));
+      pano = { renderer, world, t: 0, cam: [PANORAMA.x, Math.max(h, 63) + (PANORAMA.height || 9), PANORAMA.z], running: false };
+      if (renderer.views[0]) renderer.setHandVisible(renderer.views[0], false);
+      renderer.rain.visible = false;
     }
     if (pano.running) return; pano.running = true;
     let last = performance.now();
@@ -31,17 +33,64 @@ function startPanorama() {
       if (!pano || !pano.running) return; requestAnimationFrame(loop);
       const dt = Math.min(0.1, (now - last) / 1000); last = now; pano.t += dt;
       const r = pano.renderer; pano.world.update(pano.cam[0], pano.cam[2], 8);
-      r.camera.position.set(pano.cam[0], pano.cam[1], pano.cam[2]); r.camera.rotation.set(-0.12, pano.t * 0.05, 0);
-      r.updateSky(4000 + pano.t * 25, r.camera.position, 0); r.render();
+      const cam = r.views[0].camera;
+      cam.position.set(pano.cam[0], pano.cam[1], pano.cam[2]); cam.rotation.set(PANORAMA.pitch ?? -0.12, pano.t * (PANORAMA.speed ?? 0.05), 0);
+      r.updateSky(4000 + pano.t * 25, cam.position, 0); r.render();
     };
     requestAnimationFrame(loop);
   } catch (e) { console.warn('panorama unavailable', e); pano = null; }
 }
 function stopPanorama() { if (!pano) return null; pano.running = false; pano.world.dispose(); pano.renderer.clearChunks(); const r = pano.renderer; pano = null; return r; }
+
+// ---------- gamepad navigation of the title menu ----------
+const menuPad = { idx: 0, prev: {}, };
+function menuButtons() { const page = [...document.querySelectorAll('.menu-page')].find(p => !p.hidden); if (!page) return []; return [...page.querySelectorAll('button, .world-item')].filter(b => !b.disabled && b.offsetParent !== null); }
+function pollMenuPad() {
+  requestAnimationFrame(pollMenuPad);
+  if (!$('#menu').hidden === false) return;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : []; let pad = null;
+  for (const g of pads) if (g && g.connected) { pad = g; break; }
+  if (!pad) return;
+  const btns = menuButtons(); if (!btns.length) return;
+  const down = (i) => pad.buttons[i] && pad.buttons[i].pressed;
+  const ax = pad.axes[1] || 0;
+  const nav = { up: down(12) || ax < -0.55, down: down(13) || ax > 0.55, sel: down(0), back: down(1) };
+  for (const k of ['up', 'down', 'sel', 'back']) {
+    const was = menuPad.prev[k]; menuPad.prev[k] = nav[k];
+    if (!nav[k] || was) continue;
+    if (k === 'up') menuPad.idx = (menuPad.idx - 1 + btns.length) % btns.length;
+    if (k === 'down') menuPad.idx = (menuPad.idx + 1) % btns.length;
+    if (k === 'sel') { const b = btns[Math.min(menuPad.idx, btns.length - 1)]; if (b) { b.click(); menuPad.idx = 0; } }
+    if (k === 'back') { const b = [...document.querySelectorAll('.menu-page:not([hidden]) button')].find(x => /back|cancel|done/i.test(x.textContent)); if (b) b.click(); }
+  }
+  btns.forEach((b, i) => b.classList.toggle('gp-focus', i === Math.min(menuPad.idx, btns.length - 1)));
+}
+requestAnimationFrame(pollMenuPad);
 const SPLASHES = ['Blocks all the way down!', 'Now with 100% more cubes!', 'Procedurally yours!', 'No assets were harmed', 'Also try touching grass!', 'Creepers gonna creep', 'Dig deep, build high', 'Rendered with love and shaders', 'Punch trees to begin', 'The dragon is waiting'];
 $('.splash').textContent = SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
+$('#version-line').innerHTML = `Craftverse <b>${VERSION}</b> · runs entirely in your browser`;
+if (UPDATE_NAME) {
+  const b = $('#update-banner'); b.hidden = false;
+  b.querySelector('.ub-name').textContent = UPDATE_NAME;
+  b.querySelector('.ub-ver').textContent = 'Version ' + UPDATE_VERSION;
+}
+if (hasUnreadUpdate()) { const btn = document.querySelector('[data-page="updatelog"]'); if (btn) btn.textContent = 'Update Log  •'; }
+function renderChangelog() {
+  const list = $('#changelog'); list.innerHTML = '';
+  for (const c of CHANGELOG) {
+    const entry = document.createElement('div'); entry.className = 'log-entry' + (c.major ? ' major' : '');
+    const head = document.createElement('div'); head.className = 'log-head';
+    head.innerHTML = `<span class="log-ver">${c.version}${c.version === VERSION ? ' (current)' : ''}</span>` + (c.name ? `<span class="log-name">${escapeHtml(c.name)}</span>` : '') + `<span class="log-date">${c.date}</span>`;
+    entry.appendChild(head);
+    const ul = document.createElement('ul');
+    for (const ch of c.changes) { const li = document.createElement('li'); li.textContent = ch; ul.appendChild(li); }
+    entry.appendChild(ul); list.appendChild(entry);
+  }
+  markUpdateSeen();
+  const btn = document.querySelector('[data-page="updatelog"]'); if (btn) btn.textContent = 'Update Log';
+}
 
-function showPage(name) { for (const p of document.querySelectorAll('.menu-page')) p.hidden = p.id !== 'menu-' + name; if (name === 'worlds') refreshWorlds(); if (name === 'options') buildOptions($('#options-body'), settings, (s) => { Settings.save(s); }); }
+function showPage(name) { for (const p of document.querySelectorAll('.menu-page')) p.hidden = p.id !== 'menu-' + name; if (name === 'worlds') refreshWorlds(); if (name === 'updatelog') renderChangelog(); if (name === 'options') buildOptions($('#options-body'), settings, (s) => { Settings.save(s); }); }
 for (const b of document.querySelectorAll('[data-page]')) b.addEventListener('click', () => showPage(b.dataset.page));
 for (const b of document.querySelectorAll('.cycle')) { b.addEventListener('click', () => { const vals = b.dataset.values.split(','); const label = b.textContent.split(':')[0]; const cur = b.textContent.split(': ')[1]; const i = (vals.indexOf(cur) + 1) % vals.length; b.textContent = label + ': ' + vals[i]; }); }
 
