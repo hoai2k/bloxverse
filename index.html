@@ -1,14 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>BLOXVERSE — Discover</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='8' width='48' height='48' rx='10' fill='%23f2f4f5' transform='rotate(-8 32 32)'/%3E%3Ctext x='32' y='45' font-size='36' font-weight='900' font-family='Arial' text-anchor='middle' fill='%231b1d1f'%3EB%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="css/site.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Craftverse</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%235a9e3a'/><rect y='6' width='16' height='10' fill='%23866043'/></svg>">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="bv-main" id="main"></main>
-  <script type="module" src="js/site/home.js"></script>
+<canvas id="game"></canvas>
+
+<!-- Title / world select -->
+<div id="menu" class="screen">
+  <div class="panorama"></div>
+  <div class="menu-inner">
+    <h1 class="logo">CRAFTVERSE</h1>
+    <div class="splash">Blocks all the way down!</div>
+    <div id="menu-main" class="menu-page">
+      <button class="mc-btn big" data-page="worlds">Singleplayer</button>
+      <button class="mc-btn big" data-page="options">Options</button>
+      <button class="mc-btn big" data-page="about">About</button>
+    </div>
+    <div id="menu-worlds" class="menu-page" hidden>
+      <h2>Select World</h2>
+      <div id="world-list" class="world-list"></div>
+      <div class="row">
+        <button class="mc-btn" data-page="create">Create New World</button>
+        <button class="mc-btn" id="btn-play-world" disabled>Play Selected World</button>
+      </div>
+      <div class="row">
+        <button class="mc-btn" id="btn-delete-world" disabled>Delete</button>
+        <button class="mc-btn" data-page="main">Back</button>
+      </div>
+    </div>
+    <div id="menu-create" class="menu-page" hidden>
+      <h2>Create New World</h2>
+      <label>World Name <input id="cw-name" value="New World" maxlength="32"></label>
+      <label>Seed <input id="cw-seed" placeholder="Leave blank for random"></label>
+      <div class="row">
+        <button class="mc-btn cycle" id="cw-mode" data-values="Survival,Creative,Hardcore,Adventure,Spectator">Game Mode: Survival</button>
+        <button class="mc-btn cycle" id="cw-diff" data-values="Normal,Easy,Hard,Peaceful">Difficulty: Normal</button>
+      </div>
+      <div class="row">
+        <button class="mc-btn cycle" id="cw-type" data-values="Default,Superflat,Amplified,Large Biomes">World Type: Default</button>
+        <button class="mc-btn cycle" id="cw-cheats" data-values="OFF,ON">Allow Cheats: OFF</button>
+      </div>
+      <div class="row">
+        <button class="mc-btn cycle" id="cw-structures" data-values="ON,OFF">Generate Structures: ON</button>
+        <button class="mc-btn cycle" id="cw-bonus" data-values="OFF,ON">Bonus Chest: OFF</button>
+      </div>
+      <div class="row">
+        <button class="mc-btn" id="btn-create-world">Create New World</button>
+        <button class="mc-btn" data-page="worlds">Cancel</button>
+      </div>
+    </div>
+    <div id="menu-options" class="menu-page" hidden>
+      <h2>Options</h2>
+      <div id="options-body"></div>
+      <div class="row"><button class="mc-btn" data-page="main">Done</button></div>
+    </div>
+    <div id="menu-about" class="menu-page" hidden>
+      <h2>About</h2>
+      <p class="about">A browser voxel sandbox inspired by the block game everyone knows. Survival, Creative, Hardcore, Adventure and Spectator modes; three dimensions; biomes, caves, ores, villages, mobs, farming, crafting, smelting, weather, day/night and more. Everything, including all textures and sounds, is generated in code at runtime — no assets, no build step.</p>
+      <p class="about small">Controls: WASD move · Space jump · Shift sneak · Ctrl/double-W sprint · E inventory · Q drop · T chat · / command · F3 debug · F5 view · Esc pause · 1-9 hotbar · scroll to select · F fishing... just kidding, F swaps to offhand.</p>
+      <div class="row"><button class="mc-btn" data-page="main">Back</button></div>
+    </div>
+    <div class="version">Craftverse 1.0 · runs entirely in your browser</div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="screen" hidden><div class="loading-box"><h2 id="loading-title">Loading world</h2><div class="bar"><div id="loading-bar"></div></div><div id="loading-text">Generating terrain...</div></div></div>
+
+<!-- HUD -->
+<div id="hud" hidden>
+  <div id="crosshair"></div>
+  <div id="vignette"></div>
+  <div id="water-overlay"></div>
+  <div id="portal-overlay"></div>
+  <div id="fire-overlay"></div>
+  <div id="pumpkin-overlay"></div>
+  <div id="title-big"></div><div id="title-small"></div>
+  <div id="toast"></div>
+  <div id="bossbar" hidden><div class="boss-name"></div><div class="boss-track"><div class="boss-fill"></div></div></div>
+  <div id="effects"></div>
+  <div id="debug" hidden></div>
+  <div id="chat"><div id="chat-log"></div><input id="chat-input" hidden maxlength="256" autocomplete="off"></div>
+  <div id="status">
+    <div id="hearts" class="stat-row"></div>
+    <div id="hunger" class="stat-row"></div>
+    <div id="armor" class="stat-row"></div>
+    <div id="air" class="stat-row"></div>
+    <div id="xp"><div id="xp-fill"></div><div id="xp-level"></div></div>
+    <div id="item-name"></div>
+    <div id="hotbar"></div>
+    <div id="offhand-slot" class="slot"></div>
+  </div>
+  <div id="sleep-overlay" hidden><div>Sleeping...</div></div>
+</div>
+
+<!-- Modal screens -->
+<div id="modal" class="screen" hidden>
+  <div id="modal-box"></div>
+  <div id="cursor-stack" class="slot floating" hidden></div>
+  <div id="tooltip" hidden></div>
+</div>
+
+<script type="module" src="src/main.js"></script>
 </body>
 </html>
