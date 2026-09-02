@@ -138,6 +138,7 @@ export class UI {
     hud.root.classList.toggle('dead', p.dead);
   }
   damageFlash(p = this.game.player) { const h = this.huds.get(p); if (!h) return; h.root.classList.add('hurt'); h.flashT = 0.4; if (p.input && p.input.rumble) p.input.rumble(140, 0.5, 0.3); }
+  lightningFlash() { const f = $('#flash'); if (!f) return; f.style.opacity = '0.75'; setTimeout(() => { f.style.opacity = '0'; }, 90); }
   showToast(t) { $('#toast').textContent = t; $('#toast').style.opacity = 1; this.toastT = 3; }
   showToastFor(p, t) {
     const h = this.huds.get(p);
